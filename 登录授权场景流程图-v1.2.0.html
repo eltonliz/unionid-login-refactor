@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录授权场景流程图 V1.2.0 · 登录账号重构</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --paper:#f7f8fa; --card:#ffffff; --ink:#1d2939; --muted:#667085; --soft:#98a2b3;
+    --rule:rgba(29,41,57,0.12); --rule-solid:#d0d5dd; --accent:#07C160; --accent-tint:rgba(7,193,96,0.08);
+    --bad:#b42318; --bad-tint:rgba(180,35,24,0.04);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC',sans-serif;}
+  body{overflow-x:hidden;}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 20px 56px;}
+  .eyebrow{font:500 10px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--soft);margin:0 0 10px;}
+  h1{font-size:22px;font-weight:700;margin:0 0 6px;}
+  .sub{font-size:13px;color:var(--muted);margin:0;line-height:1.7;}
+  .topbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0 0;
+    padding:12px 14px;background:var(--card);border:1px solid var(--rule);border-radius:10px;}
+  .topbar .grp{display:flex;align-items:center;gap:8px;}
+  .topbar .lbl{font-size:12px;color:var(--muted);}
+  .btn{border:1px solid var(--rule-solid);background:#fff;color:var(--ink);border-radius:8px;
+    padding:7px 14px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--ink);}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn.small{padding:4px 10px;font-size:12px;border-radius:6px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .switch{position:relative;width:44px;height:24px;border-radius:12px;background:#cfd4dc;border:none;cursor:pointer;transition:background .15s;}
+  .switch.on{background:var(--accent);}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;}
+  .switch.on::after{left:22px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 0;padding:10px 14px;background:var(--card);
+    border:1px solid var(--rule);border-radius:10px;font-size:12px;color:var(--muted);}
+  .legend .it{display:flex;align-items:center;gap:6px;}
+  .legend .sw{width:16px;height:12px;border-radius:3px;background:#fff;border:1px solid var(--ink);}
+  .legend .sw.dia{border-radius:2px;transform:rotate(45deg) scale(.82);}
+  .legend .sw.ok{background:var(--accent-tint);border-color:var(--accent);}
+  .legend .sw.bad{background:var(--bad-tint);border-color:rgba(180,35,24,.55);border-style:dashed;}
+  .legend .sw.dot{width:8px;height:8px;border-radius:50%;background:var(--ink);border:none;}
+  .matrix{margin:14px 0 0;padding:14px;background:var(--card);border:1px solid var(--rule);border-radius:10px;}
+  .matrix h3{margin:0 0 4px;font-size:13px;}
+  .matrix .hint{font-size:12px;color:var(--muted);margin:0 0 10px;}
+  .mx-btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .mx-btn{border:1px solid var(--rule-solid);background:#fff;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;color:var(--ink);text-align:left;}
+  .mx-btn:hover{border-color:var(--ink);}
+  .mx-btn.active{border-color:var(--accent);background:var(--accent-tint);}
+  .mx-out{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.7;display:none;}
+  .mx-out.show{display:block;}
+  .mx-out.ok{background:var(--accent-tint);border:1px solid var(--accent);}
+  .mx-out.bad{background:var(--bad-tint);border:1px solid rgba(180,35,24,.4);}
+  .tabs{display:flex;gap:8px;overflow-x:auto;padding:16px 2px 10px;-webkit-overflow-scrolling:touch;}
+  .tab{flex:0 0 auto;border:1px solid var(--rule-solid);background:#fff;border-radius:18px;
+    padding:7px 14px;font-size:13px;cursor:pointer;color:var(--ink);white-space:nowrap;}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .panel{display:none;background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:18px;}
+  .panel.show{display:block;}
+  .panel .sc-eyebrow{font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:0 0 4px;}
+  .panel h2{margin:0 0 10px;font-size:17px;}
+  .blk{margin:0 0 14px;}
+  .blk h3{margin:0 0 6px;font-size:13px;color:var(--ink);}
+  .blk ul{margin:0;padding-left:18px;}
+  .blk li{margin:3px 0;font-size:13px;line-height:1.75;}
+  .blk p{margin:2px 0;font-size:13px;line-height:1.75;}
+  .blk .dim{color:var(--muted);}
+  .blk .bad-t{color:var(--bad);}
+  .tag-t{display:inline-block;font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--soft);
+    border:1px solid var(--rule);border-radius:4px;padding:1px 6px;margin-right:6px;vertical-align:1px;}
+  .flow-wrap{overflow-x:auto;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:8px;}
+  .flow-wrap svg{min-width:560px;width:100%;height:auto;display:block;}
+  .flow-wrap::after{content:'';display:none;}
+  @media (max-width:700px){
+    .flow-wrap::after{content:'← 左右滑动查看完整流程 →';display:block;text-align:center;
+      font-size:11px;color:var(--soft);padding:6px 0 2px;}
+  }
+  .flow-wrap svg text{font-family:-apple-system,'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;}
+  svg .t-name{font-size:13px;font-weight:600;fill:var(--ink);text-anchor:middle;}
+  svg .t-dia{font-size:13px;font-weight:500;fill:var(--ink);text-anchor:middle;}
+  svg .t-sub{font-size:11px;fill:var(--soft);text-anchor:middle;}
+  svg .t-lab{font-size:12px;fill:var(--muted);text-anchor:middle;}
+  svg .t-tag{font:600 9px ui-monospace,Menlo,monospace;letter-spacing:.08em;text-anchor:middle;}
+  .case-row{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap;}
+  .status{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.7;display:none;}
+  .status.show{display:block;}
+  .status.ok{background:var(--accent-tint);border:1px solid var(--accent);}
+  .status.info{background:var(--paper);border:1px solid var(--rule);}
+  table.ex{width:100%;border-collapse:collapse;font-size:12px;line-height:1.6;}
+  table.ex th,table.ex td{border:1px solid var(--rule);padding:6px 8px;text-align:left;vertical-align:top;}
+  table.ex th{background:var(--paper);font-weight:600;}
+  .mask{position:fixed;inset:0;background:rgba(29,41,57,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .mask.show{display:flex;}
+  .modal{background:#fff;border-radius:12px;max-width:460px;width:100%;padding:20px;max-height:86vh;overflow:auto;}
+  .modal h3{margin:0 0 8px;font-size:16px;}
+  .modal p{font-size:13px;line-height:1.8;margin:6px 0;}
+  .modal .acct{display:flex;gap:10px;margin:10px 0;}
+  .modal .acct div{flex:1;border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.7;}
+  .modal .acct b{display:block;font-size:12px;}
+  .modal .dim{color:var(--muted);}
+  .modal .warn{color:var(--bad);font-size:12px;}
+  .modal .btns{display:flex;gap:10px;margin-top:14px;}
+  footer{margin-top:36px;padding-top:12px;border-top:1px solid var(--rule);
+    font:400 10px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:var(--soft);}
+  @media (max-width:640px){
+    .wrap{padding:20px 12px 40px;}
+    h1{font-size:19px;}
+    .panel{padding:14px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Zhuiban · UnionID Login Refactor · Flow Spec V1.2.0</p>
+  <h1>登录授权场景流程图（研发 / 测试评审版）</h1>
+  <p class="sub">基线：《UnionID登录重构-需求说明》V1.1 + product-facts。每个场景：触发条件 → 流程图 → 关键判断 → 成功 / 不满足 / 拒绝失败 → 重复操作 → 测试重点。图文冲突时以需求说明为准。</p>
+
+  <div class="topbar">
+    <div class="grp">
+      <span class="lbl">租户配置 · 微信登录是否强制绑定手机号</span>
+      <button class="switch on" id="sw" role="switch" aria-checked="true" aria-label="微信登录是否强制绑定手机号"></button>
+      <span class="lbl" id="sw-val">开</span>
+    </div>
+    <div class="grp" style="margin-left:auto">
+      <button class="btn small" id="btn-back">← 上一场景</button>
+      <button class="btn small" id="btn-reset">重新开始</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="it"><span class="sw"></span>用户操作 / 系统步骤</span>
+    <span class="it"><span class="sw dia"></span>系统判断（是 / 否已标注）</span>
+    <span class="it"><span class="sw ok"></span>正常结果</span>
+    <span class="it"><span class="sw bad"></span>冲突 / 失败 / 被拦</span>
+    <span class="it"><span class="sw dot"></span>分支汇合</span>
+  </div>
+
+  <div class="matrix">
+    <h3>统一身份判断表 · 可点击模拟</h3>
+    <p class="hint">unionID 与已验证手机号的五种命中组合（研发实现顺序、测试拆用例都按这张表）。点击查看处理结果。</p>
+    <div class="mx-btns" id="mx-btns"></div>
+    <div class="mx-out" id="mx-out"></div>
+  </div>
+
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div id="panels"></div>
+
+  <footer>Zhuiban workspace · UnionID login refactor · flow v1.2.0 · baseline: UnionID登录重构-需求说明 V1.1 · 2026-09-24</footer>
+</div>
+
+<div class="mask" id="mask" role="dialog" aria-modal="true" aria-labelledby="m-title">
+  <div class="modal">
+    <h3 id="m-title">账号冲突 · 需要人工处理</h3>
+    <p>本次登录中，两把身份钥匙分别指向了两个已有账号。系统已停止变更关系，<b>不会自动合并、不会覆盖、不会切换账号、不会创建第三个账号</b>。</p>
+    <div class="acct">
+      <div><b>账号 A（unionID 命中）</b>手机号 139****0001<br>注册于 2026-06-12</div>
+      <div><b>账号 B（手机号命中）</b>微信用户（openID 尾号 88d2）<br>注册于 2026-08-03</div>
+    </div>
+    <p class="dim">以上为脱敏展示。两个账号的订单、余额、积分等数据均保持原状，当前登录状态不受影响。</p>
+    <p class="warn" id="m-dup" style="display:none">该冲突已有处理中的工单（<span id="m-dup-id"></span>），请勿重复提交。</p>
+    <p id="m-ok" class="status ok" style="display:none;margin:10px 0 0;">工单已提交：<b id="m-ok-id"></b>。客服会联系你完成双方身份核验，核验完成前两个账号保持独立。</p>
+    <div class="btns">
+      <button class="btn" id="m-close">返回原页面</button>
+      <button class="btn primary" id="m-submit">提交客服工单</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const state = { sw:true, cur:null, hist:[], ticket:null, mx:null };
+
+const SC = [
+  {id:'s1',  name:'APP 微信登录'},
+  {id:'s2',  name:'微信小程序登录'},
+  {id:'s3',  name:'APP 手机号验证码登录'},
+  {id:'s4',  name:'手机号用户后续绑定微信'},
+  {id:'s5',  name:'同 unionID、不同手机号'},
+  {id:'s6',  name:'同手机号、不同 unionID'},
+  {id:'s7',  name:'unionID 与 AppID+openID 命中不一致'},
+  {id:'s8',  name:'不同 AppID、不同入口、不同租户'},
+  {id:'s9',  name:'首次没有 unionID，后续取得 unionID'},
+  {id:'s10', name:'CASE1：手机号 139 先登录，尚未绑定微信'},
+  {id:'s11', name:'CASE2：微信账号已绑定手机号 138'},
+  {id:'s12', name:'CASE3：小程序先微信登录，且未要求手机号'},
+  {id:'s13', name:'账号冲突与客服工单处理'},
+];
+
+const MATRIX = [
+  {k:'unionID 未命中 · 手机号未命中', r:'ok',  t:'创建一个新账号，同时绑定微信身份（unionID / AppID+openID）和手机号。'},
+  {k:'unionID 命中 A · 手机号未命中', r:'ok',  t:'使用账号 A。手机号未被其他账号占用时可补充绑定到 A；已占用则该手机号不绑定，进入换号或冲突判断。'},
+  {k:'unionID 未命中 · 手机号命中 A', r:'ok',  t:'先判断 A 是否已有其他 unionID：没有冲突时把新微信身份绑定到 A；A 已有其他 unionID，或新 unionID 已属于账号 B → 账号冲突。'},
+  {k:'unionID 命中 A · 手机号命中 A', r:'ok',  t:'都指向账号 A → 直接使用 A 登录。已有有效手机号时，不重复要求手机号授权。'},
+  {k:'unionID 命中 A · 手机号命中 B', r:'bad', t:'账号冲突：不自动合并、不覆盖、不切换账号、不创建第三个账号。保留当前登录状态和两个账号数据，可提交客服工单（场景 13）。'},
+];
+
+const EXCEPTIONS = [
+  ['微信授权取消 / 失败 / 超时','不创建账号','不写入微信身份','保留（若已登录）','停留登录页或原页面','允许重试，或改用手机号登录'],
+  ['手机号授权拒绝','不创建半成品账号','不写绑定关系','保留','停在提示页，可重试或退出','允许重试'],
+  ['验证码错误或过期','不创建账号','不写绑定关系','保留','停在验证页','允许重新获取'],
+  ['重复点击登录','复用同一次处理结果','不重复写','保留','原页面','—（幂等）'],
+  ['重复绑定相同微信','不建号','不重复写','保留','提示已绑定','—（返回已绑定成功）'],
+  ['同一身份并发登录','只保留一个最终账号结果','不产生重复绑定','保留','—','—'],
+  ['unionID 暂时没有返回','可用 AppID+openID 建号 / 识别（仅本渠道）','写当前渠道身份','保留','当前入口内','下次取得 unionID 时补绑'],
+  ['开关在登录过程中变化','本次按进入登录时的配置处理','按进入时配置','保留','—','下次登录使用新配置'],
+  ['手机号已被其他账号使用','不抢占、不建号','不写绑定','保留','冲突页','提交客服工单'],
+  ['用户退出后重新登录','重新执行身份判断，结果与上次一致','按判断结果','—','登录页','—'],
+  ['不同租户使用相同微信身份','平台身份复用','只建立 / 读取当前租户关系','保留','当前租户内','—（租户数据互不可见）'],
+  ['客服工单重复提交','不新建工单','—','保留','冲突页','提示已有处理中的工单'],
+];
+</script>
+<script>
+/* ═══════════ 流程图数据 ═══════════
+   type: user=用户操作 sys=系统步骤 cond=系统判断 ok=正常结果 bad=冲突失败 info=说明
+   sw: 'on'/'off' = 仅在对应开关状态渲染；缺省 = 恒渲染 */
+const FLOWS = {
+
+  s1: { h:760, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['在登录页选择「微信登录」']},
+    {id:'c1',type:'cond',x:180,y:112,w:200,h:80,l:['微信授权成功？']},
+    {id:'b1',type:'bad',x:492,y:128,w:216,h:48,l:['停留登录页，不创建账号']},
+    {id:'c2',type:'cond',x:180,y:240,w:200,h:80,l:['取得 unionID？']},
+    {id:'r1',type:'sys',x:180,y:368,w:200,h:64,l:['按命中结果查账号'],sub:'unionID 优先，否则本渠道 openID'},
+    {id:'c3',type:'cond',x:180,y:480,w:200,h:80,l:['开关开，且账号没有','有效手机号？'],sw:'on'},
+    {id:'u2',type:'user',x:180,y:608,w:200,h:48,l:['短信验证码验证手机号'],sw:'on'},
+    {id:'b2',type:'bad',x:492,y:600,w:216,h:60,l:['拒绝 / 验证失败','不建号 · 不写绑定 · 可重试'],sw:'on'},
+    {id:'end',type:'ok',x:180,y:704,w:200,h:48,l:['完成登录'],sub:'原账号 / 新建 / 冲突 → 按身份判断表'},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'b1',ti:'left',l:'否'},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'是'},
+    {f:'c2',fo:'right',t:'r1',ti:'right',l:'是',via:'mid'},
+    {f:'c2',fo:'left',t:'r1',ti:'left',l:'否',via:'mid'},
+    {f:'r1',fo:'bottom',t:'c3',ti:'top',sw:'on'},
+    {f:'c3',fo:'bottom',t:'u2',ti:'top',l:'是',sw:'on'},
+    {f:'c3',fo:'right',t:'end',ti:'right',l:'否 · 已有手机号',via:'lane',sw:'on'},
+    {f:'u2',fo:'bottom',t:'end',ti:'top',l:'验证通过',accent:true,sw:'on'},
+    {f:'u2',fo:'right',t:'b2',ti:'left',l:'拒绝 / 失败',sw:'on'},
+    {f:'r1',fo:'bottom',t:'end',ti:'top',l:'开关关：按身份判断表完成登录',sw:'off'},
+  ]},
+
+  s2: { h:776, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['进入小程序']},
+    {id:'s1',type:'sys',x:180,y:112,w:200,h:56,l:['取得小程序微信身份'],sub:'unionID 或小程序 openID'},
+    {id:'c1',type:'cond',x:180,y:212,w:200,h:80,l:['有 unionID？']},
+    {id:'c2',type:'cond',x:180,y:336,w:200,h:80,l:['命中账号？']},
+    {id:'c3',type:'cond',x:180,y:460,w:200,h:80,l:['开关开，且账号','没有有效手机号？'],sw:'on'},
+    {id:'s2',type:'sys',x:180,y:588,w:200,h:52,l:['申请手机号授权（组件）'],sw:'on'},
+    {id:'b1',type:'bad',x:492,y:584,w:216,h:60,l:['拒绝授权：登录不完成','不建号 · 不写绑定 · 可重试'],sw:'on'},
+    {id:'ok',type:'ok',x:180,y:688,w:200,h:56,l:['进入小程序'],sub:'平台账号复用；只建立当前租户关系'},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'s1',ti:'top'},
+    {f:'s1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'c2',ti:'left',l:'否 · 仅本渠道查',via:[[380,252],[600,252],[600,300]]},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'是 · 跨入口查'},
+    {f:'c2',fo:'bottom',t:'c3',ti:'top',l:'是',sw:'on'},
+    {f:'c2',fo:'right',t:'ok',ti:'left',l:'否 · 按身份判断表创建或关联',via:[[380,376],[724,376],[724,716]],sw:'off'},
+    {f:'c3',fo:'bottom',t:'s2',ti:'top',l:'是 · 缺手机号才申请',sw:'on'},
+    {f:'c3',fo:'right',t:'ok',ti:'left',l:'否 · 已有有效手机号',via:[[380,500],[724,500],[724,716]],sw:'on'},
+    {f:'s2',fo:'bottom',t:'ok',ti:'top',l:'允许 · 完成验证',accent:true,sw:'on'},
+    {f:'s2',fo:'right',t:'b1',ti:'left',l:'拒绝',sw:'on'},
+  ]},
+
+  s3: { h:640, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['输入手机号和验证码']},
+    {id:'c1',type:'cond',x:180,y:112,w:200,h:80,l:['验证成功？']},
+    {id:'b1',type:'bad',x:492,y:128,w:216,h:48,l:['提示原因，不创建账号']},
+    {id:'c2',type:'cond',x:180,y:240,w:200,h:80,l:['手机号已有账号？']},
+    {id:'ok1',type:'ok',x:180,y:368,w:200,h:44,l:['登录原账号']},
+    {id:'ok2',type:'ok',x:492,y:368,w:216,h:44,l:['创建手机号账号（自动注册）']},
+    {id:'s1',type:'sys',x:180,y:464,w:200,h:64,l:['正常使用 APP'],sub:'各入口直接用，不强制微信授权'},
+    {id:'i1',type:'info',x:180,y:568,w:200,h:48,l:['需要跨端识别时再绑定微信'],sub:'见场景 4（用户主动发起）'},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'b1',ti:'left',l:'否'},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'是'},
+    {f:'c2',fo:'bottom',t:'ok1',ti:'top',l:'是'},
+    {f:'c2',fo:'right',t:'ok2',ti:'left',l:'否'},
+    {f:'ok1',fo:'bottom',t:'s1',ti:'top'},
+    {f:'ok2',fo:'bottom',t:'s1',ti:'right',via:'mid'},
+    {f:'s1',fo:'bottom',t:'i1',ti:'top'},
+  ]},
+
+  s4: { h:688, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:52,l:['账号与安全：点「绑定微信」'],sub:'或开启跨端同步 / 业务明确需要'},
+    {id:'c1',type:'cond',x:180,y:124,w:200,h:80,l:['用户同意微信授权？']},
+    {id:'b1',type:'bad',x:492,y:140,w:216,h:48,l:['保留手机号登录态，返回原页面','不退账号 · 不留半绑定']},
+    {id:'s1',type:'sys',x:180,y:252,w:200,h:52,l:['完成微信授权，取得 unionID']},
+    {id:'c2',type:'cond',x:180,y:352,w:200,h:88,l:['微信身份归属？']},
+    {id:'ok1',type:'ok',x:492,y:336,w:216,h:44,l:['当前账号 → 重复绑定，直接成功']},
+    {id:'ok2',type:'ok',x:492,y:424,w:216,h:44,l:['未被占用 → 绑定到当前账号']},
+    {id:'bad',type:'bad',x:180,y:500,w:200,h:52,l:['其他账号 → 账号冲突（场景 13）']},
+    {id:'i1',type:'info',x:180,y:608,w:200,h:44,l:['回到原操作']},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'b1',ti:'left',l:'否 / 取消'},
+    {f:'c1',fo:'bottom',t:'s1',ti:'top',l:'是'},
+    {f:'s1',fo:'bottom',t:'c2',ti:'top'},
+    {f:'c2',fo:'right',t:'ok1',ti:'left',l:'当前账号'},
+    {f:'c2',fo:'bottom',t:'ok2',ti:'left',l:'未被占用',via:'mid'},
+    {f:'c2',fo:'left',t:'bad',ti:'top',l:'其他账号'},
+    {f:'ok1',fo:'bottom',t:'i1',ti:'right',via:'mid'},
+    {f:'ok2',fo:'bottom',t:'i1',ti:'right',via:'mid'},
+    {f:'bad',fo:'bottom',t:'i1',ti:'top'},
+  ]},
+
+  s5: { h:672, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['微信登录，验证新手机号']},
+    {id:'s1',type:'sys',x:180,y:112,w:200,h:48,l:['unionID 命中账号 A']},
+    {id:'c2',type:'cond',x:180,y:204,w:200,h:88,l:['新手机号归属？']},
+    {id:'ok1',type:'ok',x:492,y:188,w:216,h:44,l:['仍是 A 的手机号 → 登录账号 A']},
+    {id:'r1',type:'sys',x:180,y:336,w:200,h:52,l:['登录 A，进入换号确认'],sub:'确认前保留 A 原手机号'},
+    {id:'c3',type:'cond',x:180,y:432,w:200,h:80,l:['换号确认完成？']},
+    {id:'ok2',type:'ok',x:492,y:428,w:216,h:44,l:['是 → 更新 A 的手机号']},
+    {id:'ok3',type:'ok',x:180,y:560,w:200,h:44,l:['否 → 保留 A 原手机号']},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'s1',ti:'top'},
+    {f:'s1',fo:'bottom',t:'c2',ti:'top'},
+    {f:'c2',fo:'right',t:'ok1',ti:'left',l:'仍是 A 的手机号'},
+    {f:'c2',fo:'bottom',t:'r1',ti:'top',l:'新号码，未被占用'},
+    {f:'r1',fo:'bottom',t:'c3',ti:'top'},
+    {f:'c3',fo:'right',t:'ok2',ti:'left',l:'是'},
+    {f:'c3',fo:'bottom',t:'ok3',ti:'top',l:'否'},
+  ], extra:[
+    {type:'bad',x:492,y:536,w:216,h:72,l:['新手机号属于账号 B','→ 账号冲突（场景 13）'],note:'不允许因手机号不同创建第二个 unionID 账号；不允许直接覆盖旧手机号。'},
+  ]},
+
+  s6: { h:680, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['微信登录，已验证手机号']},
+    {id:'s1',type:'sys',x:180,y:112,w:200,h:48,l:['手机号命中账号 A']},
+    {id:'c1',type:'cond',x:180,y:204,w:200,h:80,l:['A 已有 unionID？']},
+    {id:'c3',type:'cond',x:492,y:396,w:216,h:80,l:['与原 unionID 相同？']},
+    {id:'ok2',type:'ok',x:492,y:524,w:216,h:44,l:['相同 → 登录账号 A']},
+    {id:'c2',type:'cond',x:16,y:332,w:168,h:80,l:['新 unionID','被占用？']},
+    {id:'ok1',type:'ok',x:180,y:480,w:200,h:48,l:['否 → 绑定新 unionID 到 A']},
+    {id:'bad',type:'bad',x:492,y:600,w:216,h:64,l:['账号冲突 · 不覆盖 A 原 unionID','不自动合并（场景 13）']},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'s1',ti:'top'},
+    {f:'s1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'bottom',t:'c3',ti:'left',l:'是',via:'mid'},
+    {f:'c1',fo:'left',t:'c2',ti:'top',l:'否',via:'mid'},
+    {f:'c2',fo:'bottom',t:'ok1',ti:'left',l:'否 · 未占用',via:'mid'},
+    {f:'c2',fo:'right',t:'bad',ti:'left',l:'是 · 属于 B',via:'mid'},
+    {f:'c3',fo:'bottom',t:'ok2',ti:'top',l:'是'},
+    {f:'c3',fo:'right',t:'bad',ti:'right',l:'否',via:'lane'},
+  ], extra:[
+    {type:'info',x:16,y:472,w:168,h:88,l:['本期一个账号','只允许一个主 unionID'],note:'不允许仅凭手机号相同，自动合并两个微信账号。'},
+  ]},
+
+  s7: { h:760, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['取得 unionID 和 AppID+openID']},
+    {id:'c1',type:'cond',x:180,y:112,w:200,h:80,l:['unionID 命中账号 A？']},
+    {id:'c2',type:'cond',x:180,y:240,w:200,h:88,l:['openID 归属？']},
+    {id:'ok1',type:'ok',x:492,y:224,w:216,h:56,l:['未绑定 / 也属于 A','→ 使用 A，补齐 openID']},
+    {id:'bad',type:'bad',x:180,y:384,w:200,h:52,l:['openID 属于账号 B → 账号冲突']},
+    {id:'c3',type:'cond',x:180,y:492,w:200,h:80,l:['openID 命中账号 A？']},
+    {id:'i1',type:'info',x:492,y:508,w:216,h:48,l:['否 → 按新身份继续判断','（身份判断表）']},
+    {id:'c4',type:'cond',x:180,y:620,w:200,h:80,l:['A 已有其他 unionID？']},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'是'},
+    {f:'c2',fo:'right',t:'ok1',ti:'left',l:'未绑定 / 属于 A'},
+    {f:'c2',fo:'left',t:'bad',ti:'top',l:'属于账号 B'},
+    {f:'c1',fo:'left',t:'c3',ti:'left',l:'否',via:[[104,152],[104,532]]},
+    {f:'c3',fo:'right',t:'i1',ti:'left',l:'否'},
+    {f:'c3',fo:'bottom',t:'c4',ti:'top',l:'是'},
+  ], extra:[
+    {type:'ok',x:492,y:636,w:216,h:48,l:['否 → 为 A 补充 unionID'],note:'是 → 账号冲突（T13）。openID 只能在所属 AppID 内使用，不跨 AppID 比较。'},
+  ]},
+
+  s8: { h:640, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:44,l:['从新入口登录（新 APP / 小程序 / 租户）']},
+    {id:'c1',type:'cond',x:180,y:112,w:200,h:88,l:['同一开放平台','且有 unionID？']},
+    {id:'ok1',type:'ok',x:492,y:120,w:216,h:44,l:['按 unionID 复用平台账号']},
+    {id:'c2',type:'cond',x:180,y:268,w:200,h:80,l:['已验证手机号命中账号？']},
+    {id:'o1',type:'info',x:180,y:400,w:200,h:52,l:['保持为独立账号'],sub:'进入租户仍只建立当前租户关系'},
+    {id:'c3',type:'cond',x:492,y:304,w:216,h:80,l:['当前租户已有关系？']},
+    {id:'ok2',type:'ok',x:492,y:452,w:216,h:44,l:['是 → 只加载当前租户数据']},
+    {id:'ok3',type:'ok',x:492,y:544,w:216,h:44,l:['否 → 新增当前租户关系']},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'ok1',ti:'left',l:'是'},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'否'},
+    {f:'c2',fo:'right',t:'c3',ti:'left',l:'是 · 命中账号',via:'mid'},
+    {f:'c2',fo:'bottom',t:'o1',ti:'top',l:'否'},
+    {f:'c3',fo:'bottom',t:'ok2',ti:'top',l:'是'},
+    {f:'c3',fo:'top',t:'ok3',ti:'left',l:'否',via:'lane'},
+  ], extra:[
+    {type:'bad',x:16,y:296,w:168,h:64,l:['不同 AppID 的 openID','不互相比较'],note:'即使字符串相同也不能合并。租户数据按租户隔离，unionID 相同不带出其他租户数据。'},
+  ]},
+
+  s9: { h:560, nodes:[
+    {id:'s1',type:'sys',x:180,y:24,w:200,h:52,l:['账号 A 早期仅有 AppID+openID','（仅本渠道内识别）']},
+    {id:'u1',type:'user',x:180,y:120,w:200,h:44,l:['后续登录取得 unionID']},
+    {id:'c1',type:'cond',x:180,y:208,w:200,h:88,l:['unionID 已属于谁？']},
+    {id:'ok1',type:'ok',x:492,y:192,w:216,h:44,l:['未被占用 → 绑定到账号 A']},
+    {id:'ok2',type:'ok',x:492,y:280,w:216,h:44,l:['账号 A → 正常登录']},
+    {id:'bad',type:'bad',x:180,y:352,w:200,h:52,l:['账号 B → 账号冲突（场景 13）']},
+    {id:'i1',type:'info',x:180,y:456,w:200,h:52,l:['后续跨入口优先按 unionID 识别'],sub:'未取得 unionID 时维持现状'},
+  ], edges:[
+    {f:'s1',fo:'bottom',t:'u1',ti:'top'},
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'ok1',ti:'left',l:'未被占用'},
+    {f:'c1',fo:'bottom',t:'bad',ti:'top',l:'账号 B'},
+    {f:'c1',fo:'left',t:'ok2',ti:'right',l:'账号 A',via:'mid'},
+    {f:'ok1',fo:'bottom',t:'i1',ti:'right',via:'mid'},
+    {f:'ok2',fo:'bottom',t:'i1',ti:'left',via:'mid'},
+  ], extra:[]},
+
+  s10: { h:624, nodes:[
+    {id:'s1',type:'sys',x:180,y:24,w:200,h:52,l:['账号 A：手机号 139','无 unionID（APP 手机号登录）']},
+    {id:'u1',type:'user',x:180,y:120,w:200,h:52,l:['小程序取得 unionID','并验证手机号']},
+    {id:'c1',type:'cond',x:180,y:216,w:200,h:80,l:['unionID 已有归属？']},
+    {id:'c2',type:'cond',x:180,y:352,w:200,h:88,l:['验证手机号归属？']},
+    {id:'ok1',type:'ok',x:492,y:336,w:216,h:48,l:['139 · 命中 A → 微信身份绑定 A']},
+    {id:'ok2',type:'ok',x:492,y:428,w:216,h:48,l:['新手机号未命中 → 创建独立账号 B']},
+    {id:'info',type:'info',x:180,y:496,w:200,h:52,l:['命中其他账号 B'],sub:'按账号 B 继续并校验冲突'},
+  ], edges:[
+    {f:'s1',fo:'bottom',t:'u1',ti:'top'},
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'ok1',ti:'left',l:'未被占用',via:'mid'},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'未被占用'},
+    {f:'c2',fo:'right',t:'ok2',ti:'left',l:'新手机号 · 未命中'},
+    {f:'c2',fo:'bottom',t:'info',ti:'top',l:'命中其他账号 B'},
+  ], extra:[
+    {type:'bad',x:492,y:184,w:216,h:64,l:['unionID 已属于其他账号','→ 账号冲突（场景 13）'],note:'登录顺序调换（先小程序后 APP），结果必须一致：绑定 A / 新建 B / 冲突。'},
+  ]},
+
+  s11: { h:672, nodes:[
+    {id:'s1',type:'sys',x:180,y:24,w:200,h:52,l:['账号 A：unionID-1 + 手机号 138']},
+    {id:'u1',type:'user',x:180,y:120,w:200,h:44,l:['小程序取得微信身份']},
+    {id:'c1',type:'cond',x:180,y:208,w:200,h:80,l:['unionID 相同？']},
+    {id:'c2',type:'cond',x:180,y:332,w:200,h:88,l:['验证手机号归属？']},
+    {id:'ok1',type:'ok',x:492,y:316,w:216,h:44,l:['138 或未要求验证 → 登录账号 A']},
+    {id:'ok2',type:'ok',x:492,y:408,w:216,h:44,l:['新号码未占用 → 登录 A，换号确认']},
+    {id:'c3',type:'cond',x:180,y:480,w:200,h:80,l:['手机号命中 A？']},
+    {id:'info',type:'info',x:180,y:616,w:200,h:48,l:['否 → 按独立身份继续判断']},
+  ], edges:[
+    {f:'s1',fo:'bottom',t:'u1',ti:'top'},
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'bottom',t:'c2',ti:'top',l:'是'},
+    {f:'c2',fo:'right',t:'ok1',ti:'left',l:'138 或未要求验证'},
+    {f:'c2',fo:'bottom',t:'ok2',ti:'left',l:'新号码未占用',via:'mid'},
+    {f:'c2',fo:'left',t:'c3',ti:'top',l:'否（unionID 不同）',via:'mid'},
+    {f:'c3',fo:'right',t:'info',ti:'left',l:'否'},
+  ], extra:[
+    {type:'bad',x:492,y:496,w:216,h:88,l:['手机号命中 A → 账号冲突','不覆盖 A 原 unionID','不创建第二个微信账号'],note:'unionID 相同但手机号不同：进入换号确认或手机号冲突，始终使用账号 A。'},
+  ]},
+
+  s12: { h:560, nodes:[
+    {id:'s1',type:'sys',x:180,y:24,w:200,h:52,l:['小程序账号 A：仅有 unionID-1','（开关关闭，未要求手机号）']},
+    {id:'s2',type:'sys',x:180,y:120,w:200,h:52,l:['APP 手机号账号 B：手机号登录']},
+    {id:'u1',type:'user',x:180,y:216,w:200,h:44,l:['B 发起绑定微信']},
+    {id:'c1',type:'cond',x:180,y:304,w:200,h:88,l:['取得的 unionID？']},
+    {id:'bad',type:'bad',x:492,y:288,w:216,h:64,l:['unionID-1 → A 与 B 冲突','不能自动合并（场景 13）']},
+    {id:'ok1',type:'ok',x:492,y:400,w:216,h:44,l:['其他 unionID → 保持两个独立账号']},
+    {id:'i1',type:'info',x:180,y:448,w:200,h:52,l:['未取得 unionID → 暂不关联'],sub:'不能跨 AppID 比较 openID'},
+  ], edges:[
+    {f:'s1',fo:'bottom',t:'s2',ti:'top',l:'用户随后在 APP 注册手机号账号 B'},
+    {f:'s2',fo:'bottom',t:'u1',ti:'top'},
+    {f:'u1',fo:'bottom',t:'c1',ti:'top'},
+    {f:'c1',fo:'right',t:'bad',ti:'left',l:'unionID-1'},
+    {f:'c1',fo:'bottom',t:'ok1',ti:'left',l:'其他 unionID',via:'mid'},
+    {f:'c1',fo:'left',t:'i1',ti:'right',l:'未取得',via:'mid'},
+  ], extra:[]},
+
+  s13: { h:536, nodes:[
+    {id:'u1',type:'user',x:180,y:24,w:200,h:52,l:['登录 / 绑定中出现','身份命中不一致']},
+    {id:'s1',type:'sys',x:180,y:120,w:200,h:44,l:['停止登录关系变更']},
+    {id:'s2',type:'sys',x:180,y:208,w:200,h:52,l:['保留当前登录状态','和两个账号原有数据']},
+    {id:'s3',type:'sys',x:180,y:304,w:200,h:52,l:['展示冲突原因','+ 两个脱敏账号信息']},
+    {id:'u2',type:'user',x:180,y:400,w:200,h:44,l:['提交客服工单']},
+    {id:'s4',type:'sys',x:492,y:396,w:216,h:52,l:['生成工单记录','同一组冲突只保留一条']},
+    {id:'i1',type:'info',x:180,y:488,w:200,h:44,l:['受控合并与资产迁移：非本期范围']},
+  ], edges:[
+    {f:'u1',fo:'bottom',t:'s1',ti:'top'},
+    {f:'s1',fo:'bottom',t:'s2',ti:'top'},
+    {f:'s2',fo:'bottom',t:'s3',ti:'top'},
+    {f:'s3',fo:'bottom',t:'u2',ti:'top'},
+    {f:'u2',fo:'right',t:'s4',ti:'left',l:'提交'},
+  ], extra:[
+    {type:'bad',x:492,y:296,w:216,h:60,l:['不覆盖 unionID / openID / 手机号','不切换账号 · 不建第三个账号'],note:'点击下方按钮可模拟冲突弹窗与工单提交。'},
+  ]},
+};
+
+/* ═══════════ 场景规则文本 ═══════════ */
+const TEXTS = {
+  s1: {
+    trigger:'用户在 APP 登录页选择「微信登录」，完成微信授权（拿到 unionID + APP openID）。',
+    judge:['能取得 unionID → 优先按 unionID 查账号。','取不到 unionID → 只按当前 AppID + openID 查（仅本渠道内有效，不跨 AppID 比较）。','unionID 与 AppID+openID 命中不同账号 → 账号冲突（场景 13）。','开关开且账号没有有效手机号 → 先完成手机号验证（短信验证码；APP 微信授权给不了手机号）；已有有效手机号 → 不重复要求。'],
+    success:'登录原账号；或新微信用户按身份判断表创建账号（开关开时同时完成手机号验证）。两个账号都不被覆盖。', 
+    fail:'按身份判断表进入账号冲突（unionID 与手机号分别命中两个账号）→ 场景 13，不自动合并。',
+    refuse:'授权取消 / 失败 / 超时：停留登录页，不创建账号、不写绑定。开关开且缺手机号时拒绝验证 → 登录不完成，可重试或改用手机号登录。',
+    repeat:'同一微信重复登录 → unionID（或 AppID+openID）命中同一账号，幂等，不重复建号。开关在登录过程中变化 → 本次按进入登录时的配置处理。',
+    tests:'T01 开关关新用户 · T02 开关开新用户验证手机号 · T03 已有手机号不重复要求 · T04 拒绝手机号无半绑定 · T17 openID 不跨 AppID 比较'
+  },
+  s2: {
+    trigger:'用户进入小程序（首次进入，或登录态失效后重新进入）。',
+    judge:['先识别微信身份：有 unionID → 按 unionID 跨入口查；没有 → 仅按小程序 AppID+openID 查。','找到账号 → 检查手机号要求；未找到 → 按身份判断表创建或关联。','顺序固定：先识别微信账号 → 判断账号是否已有手机号 → 确实缺少时才申请手机号授权；不能先弹手机号授权再查账号。','开关开且账号已有有效手机号 → 不重复要求手机号授权。'],
+    success:'进入小程序；unionID 命中 APP 已有账号时使用同一账号并补小程序 AppID+openID；只建立当前租户关系，不带其他租户数据。',
+    fail:'未找到账号且开关开、拒绝手机号授权 → 登录不完成：不创建半成品账号、不写绑定关系。',
+    refuse:'拒绝手机号授权 → 停在提示页，可重试或退出；微信身份不落库（无半绑定数据）。',
+    repeat:'重复进入小程序 → 命中同一账号，结果一致。开关在登录中变化 → 本次按进入时配置。',
+    tests:'T01 · T02 · T04 · T14 首次无 unionID 用 AppID+openID · T23 两个租户数据互相不可见'
+  },
+  s3: {
+    trigger:'用户在 APP 登录页选择「手机号登录」，输入手机号和验证码。',
+    judge:['验证码校验：错误 / 过期 → 提示重试；频繁获取 → 图形验证码。','验证成功后：手机号已有账号 → 登录原账号；没有 → 创建手机号账号（自动注册）。','租户开关只影响微信登录，不影响手机号验证码登录。'],
+    success:'登录原账号或创建手机号账号；直播、收藏、分享、我的、购买均可直接使用，不在每个入口强制微信授权。分享用系统分享；通讯录只申请系统通讯录权限，与微信授权分开。',
+    fail:'验证码错误或过期 → 不创建账号、不写绑定，可重新获取。',
+    refuse:'—（本场景无微信授权环节）。需要微信身份时，用户可稍后在账号与安全主动绑定（场景 4）。',
+    repeat:'同一手机号重复登录 → 命中同一账号，不重复建号。',
+    tests:'T18 已有账号 · T19 新用户 · T24 普通业务入口不统一弹微信授权 · 通讯录权限与微信授权分开'
+  },
+  s4: {
+    trigger:'手机号用户在「账号与安全」主动绑定微信；或主动开启跨端同步；或某项业务确实需要识别微信身份且已明确告知用途。',
+    judge:['用户同意授权 → 取得 unionID。','微信身份归属判断：属于当前账号 → 视为重复绑定，直接成功；未被占用 → 绑定到当前账号；属于其他账号 → 账号冲突。','当前账号 A 已有其他主 unionID → 不绑定第二个主 unionID，进入冲突。'],
+    success:'微信身份绑定到当前手机号账号，跨端识别生效。',
+    fail:'微信身份已被其他账号占用 → 账号冲突（场景 13），不覆盖绑定。',
+    refuse:'用户拒绝 / 取消授权 → 保留手机号登录状态，返回原页面或原操作；不退出账号、不创建微信账号、不留半绑定数据。',
+    repeat:'连续两次绑定同一微信 → 第二次直接返回已绑定，不重复写入。',
+    tests:'T20 取消绑定保持状态 · T21 重复绑定幂等 · T05 / T06 命中组合'
+  },
+  s5: {
+    trigger:'unionID 已命中账号 A，但本次验证的手机号与 A 当前手机号不同。',
+    judge:['新手机号仍是 A 的手机号 → 直接登录 A。','新手机号未被任何账号占用 → 登录 A，进入换号确认；确认前保留 A 原手机号。','新手机号属于账号 B → 停止处理，进入冲突。'],
+    success:'始终使用 unionID 对应的原账号 A；换号确认完成后更新 A 的手机号。',
+    fail:'新手机号属于账号 B → 账号冲突，不覆盖原手机号。',
+    refuse:'用户不确认换号 → 保留 A 原手机号，本次不更新。',
+    repeat:'同一组合重复触发 → 结果一致；不允许因手机号不同创建第二个 unionID 账号。',
+    tests:'T09 同 unionID 新号码未占用 → 换号确认 · T10 新号码属于 B → 冲突不覆盖'
+  },
+  s6: {
+    trigger:'已验证手机号命中账号 A，但本次微信 unionID 与 A 已绑 unionID 不同（或 A 尚无 unionID）。',
+    judge:['A 没有 unionID：新 unionID 未被占用 → 绑定到 A；已被占用（属于 B）→ 冲突。','A 已有同 unionID → 直接登录 A。','A 已有其他 unionID → 冲突，不覆盖、不绑第二个主 unionID。'],
+    success:'A 无微信身份时补绑成功；或同 unionID 直接登录 A。',
+    fail:'新 unionID 属于 B，或 A 已有其他 unionID → 账号冲突，不自动合并。',
+    refuse:'—（判定型场景，无授权动作；冲突走场景 13 工单）。',
+    repeat:'同一身份组合重复触发 → 结果一致。',
+    tests:'T11 手机号命中 A、A 无 unionID、新 unionID 未占用 → 绑定 A · T12 A 已有其他 unionID → 冲突'
+  },
+  s7: {
+    trigger:'本次同时取得 unionID 和当前 AppID+openID，两者命中结果不一致。',
+    judge:['unionID 命中 A：openID 未绑定或也属于 A → 使用 A 并补齐 openID；openID 属于 B → 冲突。','unionID 未命中：openID 命中 A → A 已有其他 unionID 则冲突，否则为 A 补充 unionID；openID 也未命中 → 按身份判断表继续。','openID 只能在所属 AppID 内使用；不同 AppID 的 openID 不互相比较，即使字符串相同。'],
+    success:'两键命中同一账号 → 登录并补齐缺失关系。',
+    fail:'命中不同账号 → 账号冲突（场景 13）。',
+    refuse:'—（判定型场景）。',
+    repeat:'同一身份组合重复触发 → 结果一致。',
+    tests:'T13 unionID 命中 A、openID 命中 B → 冲突 · T17 不同 AppID openID 相同不作为同一用户依据'
+  },
+  s8: {
+    trigger:'用户从新的 APP、小程序或租户入口登录。',
+    judge:['同一微信开放平台且有 unionID → 按 unionID 复用平台账号。','无 unionID → 已验证手机号命中账号则复用；否则保持独立账号。','平台账号可复用，但订单、会员、权益等按租户隔离；当前租户无关系 → 只新增当前租户关系。'],
+    success:'复用平台账号并只加载当前租户数据；或保持独立账号。',
+    fail:'—（判定型场景）。不同 AppID 的 openID 不互相比较，即使字符串相同。',
+    refuse:'—。',
+    repeat:'同一用户进入两个租户 → 平台身份可识别，租户数据互相不可见。',
+    tests:'T23 租户隔离 · T17 跨 AppID openID 不比较'
+  },
+  s9: {
+    trigger:'账号 A 早期只记录了 AppID+openID（unionID 未返回），后续登录取得了 unionID。',
+    judge:['unionID 未被占用 → 补充绑定到 A，不创建新账号。','unionID 属于 A → 正常登录。','unionID 已属于账号 B → 冲突，不把 A 自动并入 B。'],
+    success:'补齐后，后续跨入口优先按 unionID 识别。',
+    fail:'unionID 属于 B → 冲突（场景 13）。',
+    refuse:'后续仍未取得 unionID → 维持 AppID+openID 现状（仅本渠道内识别）。',
+    repeat:'补齐动作幂等，重复触发结果一致。',
+    tests:'T14 · T15 · T16'
+  },
+  s10: {
+    trigger:'APP 已存在手机号账号 A（139，无 unionID）；用户随后通过小程序微信登录，取得 unionID 并验证手机号。',
+    judge:['unionID 已有归属（其他账号）→ 冲突。','unionID 未被占用 → 看验证手机号：是 139（命中 A）→ 微信身份绑定 A；是其他未使用号码 → 创建独立账号 B；命中其他账号 B → 按 B 继续并校验冲突。','调换 APP 和小程序的登录顺序，结果必须一致。'],
+    success:'手机号同为 139 → 绑定到 A；其他未使用号码 → 新建独立账号 B（不与 A 合并）。',
+    fail:'unionID 或手机号已属于其他账号 → 冲突。',
+    refuse:'小程序未验证手机号 → 按微信身份单独判断（unionID 未占用时无法与 A 关联，保持独立账号）。',
+    repeat:'重复登录结果一致；登录顺序无关。',
+    tests:'T05 · T08 · 登录顺序无关性'
+  },
+  s11: {
+    trigger:'账号 A 已绑定 unionID-1 和手机号 138；用户随后从小程序登录。',
+    judge:['unionID 仍是 unionID-1 → 继续使用 A：验证 138 或未要求验证 → 登录 A；新号码未占用 → 登录 A 并进入换号确认；新号码属于 B → 冲突。','unionID 不同但手机号命中 138 → 冲突，不覆盖 A 原 unionID。','unionID 不同且手机号也不命中 A → 按独立身份继续判断。'],
+    success:'同一微信身份 → 始终是账号 A，不创建第二个微信账号。',
+    fail:'unionID 不同且手机号命中 A → 冲突。',
+    refuse:'未验证手机号 → 按 unionID 命中直接登录 A。',
+    repeat:'登录顺序变化不能改变结果。',
+    tests:'T09 · T10 · T12'
+  },
+  s12: {
+    trigger:'租户开关关闭；小程序先创建了仅有 unionID-1 的账号 A。之后用户在 APP 用手机号创建账号 B，并尝试绑定微信。',
+    judge:['绑定微信取得 unionID-1 → 微信身份属于账号 A：A 与 B 两个已有账号冲突，不能自动合并。','取得其他 unionID → 保持两个独立账号。','未取得 unionID → 不能拿 APP openID 与小程序 openID 比较，暂不关联。'],
+    success:'身份一致且无冲突时才关联；否则保持独立。',
+    fail:'unionID-1 → 冲突（场景 13），不静默合并账号 B。',
+    refuse:'用户取消绑定 → 保留 B 的手机号登录态，返回原操作。',
+    repeat:'重复触发结果一致。',
+    tests:'T08 · T13 · 跨 AppID openID 不比较'
+  },
+  s13: {
+    trigger:'任意场景判定出 unionID / AppID+openID / 手机号命中不一致，指向两个已有账号。',
+    judge:['立即停止登录关系变更。','保留当前登录状态和两个账号原有数据；不覆盖 unionID、openID 或手机号。','展示冲突原因和两个脱敏账号信息。','用户可提交客服工单；重复提交同一组冲突 → 只保留一条有效处理记录。'],
+    success:'冲突被记录，用户可继续使用当前账号（会话保留）。',
+    fail:'—（冲突即失败态：不自动合并、不切换、不建第三个账号）。真实账号合并和资产迁移不在本期范围。',
+    refuse:'用户不提交工单 → 保持账号独立，可继续用当前账号。',
+    repeat:'重复提交同一组冲突 → 提示已有处理中的工单，不新建。',
+    tests:'T08 冲突不自动合并 · 工单重复提交幂等 · 受控合并需双方身份核验（非本期）'
+  }
+};
+</script>
+<script>
+/* ═══════════ SVG 渲染器 ═══════════ */
+const PAPER_BG='#f7f8fa', INK='#1d2939', MUTED='#667085', ACCENT='#07C160';
+const TAGS={user:'用户',sys:'系统',cond:'系统',ok:'结果',bad:'冲突',info:'说明'};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function anchor(n,side){
+  const cx=n.x+n.w/2, cy=n.y+n.h/2;
+  return {top:[cx,n.y],bottom:[cx,n.y+n.h],left:[n.x,cy],right:[n.x+n.w,cy]}[side];
+}
+function nodeBox(n){
+  const stroke=n.type==='bad'?'rgba(180,35,24,.55)':(n.type==='ok'?ACCENT:(n.type==='info'?'rgba(29,41,57,.35)':INK));
+  const dash=(n.type==='bad'||n.type==='info')?' stroke-dasharray="4,3"':'';
+  const fill=n.type==='ok'?'rgba(7,193,96,0.08)':(n.type==='bad'?'rgba(180,35,24,0.04)':(n.type==='info'?'rgba(29,41,57,0.02)':'#ffffff'));
+  let s='';
+  if(n.shape==='diamond'){
+    const cx=n.x+n.w/2, cy=n.y+n.h/2;
+    s='<polygon points="'+n.x+','+cy+' '+cx+','+n.y+' '+(n.x+n.w)+','+cy+' '+cx+','+(n.y+n.h)+'" fill="#ffffff" stroke="'+stroke+'" stroke-width="1.2"'+dash+'/>';
+    n.l.forEach((t,i)=>{ s+='<text class="t-dia" x="'+cx+'" y="'+(cy+(i-(n.l.length-1)/2)*16+4)+'">'+esc(t)+'</text>'; });
+    s+=tagChip(cx-16,n.y-18,n.type);
+  }else{
+    s+='<rect x="'+n.x+'" y="'+n.y+'" width="'+n.w+'" height="'+n.h+'" rx="6" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1"'+dash+'/>';
+    const lh=16, cnt=n.l.length+(n.sub?1:0);
+    const top=n.y+n.h/2-((cnt-1)*lh)/2+4;
+    n.l.forEach((t,i)=>{ s+='<text class="t-name" x="'+(n.x+n.w/2)+'" y="'+(top+i*lh)+'">'+esc(t)+'</text>'; });
+    if(n.sub) s+='<text class="t-sub" x="'+(n.x+n.w/2)+'" y="'+(top+n.l.length*lh+2)+'">'+esc(n.sub)+'</text>';
+    s+=tagChip(n.x+6,n.y+6,n.type);
+  }
+  return s;
+}
+function tagChip(tx,ty,type){
+  const label=TAGS[type]||'', w=label.length*8+12;
+  const col=type==='ok'?ACCENT:(type==='bad'?'#b42318':INK);
+  return '<rect x="'+tx+'" y="'+ty+'" width="'+w+'" height="14" rx="3" fill="'+PAPER_BG+'" stroke="rgba(29,41,57,.25)" stroke-width="0.8"/>'+
+    '<text class="t-tag" x="'+(tx+w/2)+'" y="'+(ty+10)+'" fill="'+col+'">'+label+'</text>';
+}
+function pathThrough(pts){
+  const r=8; let d='M '+pts[0][0]+' '+pts[0][1];
+  for(let i=1;i<pts.length-1;i++){
+    const p=pts[i],pr=pts[i-1],nx=pts[i+1];
+    const v1=[p[0]-pr[0],p[1]-pr[1]], v2=[nx[0]-p[0],nx[1]-p[1]];
+    const l1=Math.hypot(v1[0],v1[1]), l2=Math.hypot(v2[0],v2[1]);
+    if(l1<2||l2<2) continue;
+    const rr=Math.min(r,l1/2,l2/2);
+    d+=' L '+(p[0]-v1[0]/l1*rr)+' '+(p[1]-v1[1]/l1*rr)+' Q '+p[0]+' '+p[1]+' '+(p[0]+v2[0]/l2*rr)+' '+(p[1]+v2[1]/l2*rr);
+  }
+  const last=pts[pts.length-1];
+  d+=' L '+last[0]+' '+last[1];
+  return d;
+}
+function route(a,b,out,inn,via){
+  const p1=anchor(a,out), p2=anchor(b,inn);
+  if(Array.isArray(via)) return [p1].concat(via,[p2]);
+  if(via==='mid'){
+    if(out==='right'&&inn==='right'){ const mx=Math.max(p1[0],p2[0])+32; return [p1,[mx,p1[1]],[mx,p2[1]],p2]; }
+    if(out==='left'&&inn==='left'){ const mx=Math.min(p1[0],p2[0])-32; return [p1,[mx,p1[1]],[mx,p2[1]],p2]; }
+    if(out==='right'&&inn==='left'||out==='left'&&inn==='right'){ const mx=Math.round((p1[0]+p2[0])/2/4)*4; return [p1,[mx,p1[1]],[mx,p2[1]],p2]; }
+  }
+  if(via==='lane'){ return [p1,[724,p1[1]],[724,p2[1]],[p2[0]+(p2[0]>400?8:-8),p2[1]],p2]; }
+  if(out==='bottom'&&inn==='top'){
+    if(Math.abs(p1[0]-p2[0])<2) return [p1,p2];
+    const my=Math.round((p1[1]+p2[1])/2/4)*4; return [p1,[p1[0],my],[p2[0],my],p2];
+  }
+  if(out==='bottom'&&(inn==='left'||inn==='right')) return [p1,[p1[0],p2[1]],p2];
+  if(out==='right'&&inn==='left'){ if(Math.abs(p1[1]-p2[1])<2) return [p1,p2]; const mx=Math.round((p1[0]+p2[0])/2/4)*4; return [p1,[mx,p1[1]],[mx,p2[1]],p2]; }
+  if(out==='left'&&inn==='right'){ if(Math.abs(p1[1]-p2[1])<2) return [p1,p2]; const mx=Math.round((p1[0]+p2[0])/2/4)*4; return [p1,[mx,p1[1]],[mx,p2[1]],p2]; }
+  if(out==='right'&&inn==='top'){ return [p1,[p2[0],p1[1]],p2]; }
+  if(out==='left'&&inn==='top'){ return [p1,[p2[0],p1[1]],p2]; }
+  if(out==='top'&&inn==='left'){ return [p1,[p1[0],p2[1]],p2]; }
+  return [p1,p2];
+}
+function midOf(pts){
+  let total=0; const segs=[];
+  for(let i=1;i<pts.length;i++){ const l=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]); segs.push(l); total+=l; }
+  let acc=0;
+  for(let i=1;i<pts.length;i++){
+    if(acc+segs[i-1]>=total/2&&segs[i-1]>0){
+      const t=(total/2-acc)/segs[i-1];
+      return {p:[pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t],
+              h:Math.abs(pts[i][0]-pts[i-1][0])>Math.abs(pts[i][1]-pts[i-1][1])};
+    }
+    acc+=segs[i-1];
+  }
+  return {p:pts[0],h:true};
+}
+function renderFlow(scId){
+  const f=FLOWS[scId]; if(!f) return '';
+  const nodes={}, order=[];
+  (f.nodes||[]).forEach(n=>{
+    if(n.sw==='on'&&!state.sw) return;
+    if(n.sw==='off'&&state.sw) return;
+    if(n.w===0) return;
+    nodes[n.id]=Object.assign({shape:n.type==='cond'?'diamond':'rect'},n);
+    order.push(n.id);
+  });
+  let edges='';
+  (f.edges||[]).forEach(e=>{
+    const a=nodes[e.f], b=nodes[e.t];
+    if(!a||!b) return;
+    if(e.sw==='on'&&!state.sw) return;
+    if(e.sw==='off'&&state.sw) return;
+    const pts=route(a,b,e.fo,e.ti,e.via);
+    edges+='<path d="'+pathThrough(pts)+'" stroke="'+(e.accent?ACCENT:MUTED)+'" stroke-width="'+(e.accent?1.4:1.2)+
+      '" fill="none" marker-end="url(#'+(e.accent?'arg-':'ar-')+scId+')"/>';
+    if(e.l){
+      const m=midOf(pts), w=Math.min(220,e.l.length*12+12);
+      if(m.h){ edges+='<rect x="'+(m.p[0]-w/2)+'" y="'+(m.p[1]-20)+'" width="'+w+'" height="16" fill="'+PAPER_BG+'"/>'+
+        '<text class="t-lab" x="'+m.p[0]+'" y="'+(m.p[1]-8)+'">'+esc(e.l)+'</text>'; }
+      else{ edges+='<rect x="'+(m.p[0]+6)+'" y="'+(m.p[1]-8)+'" width="'+w+'" height="16" fill="'+PAPER_BG+'"/>'+
+        '<text class="t-lab" x="'+(m.p[0]+6+w/2)+'" y="'+(m.p[1]+4)+'">'+esc(e.l)+'</text>'; }
+    }
+  });
+  let ns=''; order.forEach(id=>{ ns+=nodeBox(nodes[id]); });
+  (f.extra||[]).forEach(x=>{ ns+=nodeBox(Object.assign({shape:'rect'},x,{l:x.l})); });
+  const defs='<defs><marker id="ar-'+scId+'" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="'+MUTED+'"/></marker>'+
+    '<marker id="arg-'+scId+'" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="'+ACCENT+'"/></marker></defs>';
+  return '<svg viewBox="0 0 760 '+f.h+'" role="img" aria-labelledby="t-'+scId+'"><title id="t-'+scId+'">'+
+    esc(scName(scId))+' 流程图</title>'+defs+'<rect width="760" height="'+f.h+'" fill="'+PAPER_BG+'"/>'+edges+ns+'</svg>';
+}
+function scName(id){ const s=SC.find(x=>x.id===id); return s?s.name:id; }
+
+/* ═══════════ 面板构建 ═══════════ */
+function blk(title,tag,inner){ return '<div class="blk"><h3><span class="tag-t">'+tag+'</span>'+title+'</h3>'+inner+'</div>'; }
+function ul(items){ return '<ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul>'; }
+function buildPanels(){
+  const host=document.getElementById('panels');
+  host.innerHTML=SC.map((s,idx)=>{
+    const t=TEXTS[s.id];
+    let html='<section class="panel" id="p-'+s.id+'" role="tabpanel" aria-label="'+esc(s.name)+'">';
+    html+='<p class="sc-eyebrow">Scenario '+(idx<9?'0':'')+(idx+1)+' · '+esc(s.name)+'</p><h2>场景 '+(idx+1)+'：'+esc(s.name)+'</h2>';
+    html+=blk('触发条件','触发','<p>'+t.trigger+'</p>');
+    html+='<div class="blk"><h3><span class="tag-t">流程</span>流程图</h3><div class="flow-wrap" data-flow="'+s.id+'"></div>'+(FLOW_NOTE[s.id]?'<p class="dim" style="font-size:12px;margin:6px 0 0">'+FLOW_NOTE[s.id]+'</p>':'')+'</div>';
+    html+=blk('关键判断','判断',ul(t.judge));
+    html+=blk('成功结果','成功','<p>'+t.success+'</p>');
+    html+=blk('不满足条件时的结果','不满足','<p>'+t.fail+'</p>');
+    html+=blk('用户拒绝或失败后的处理','拒绝','<p>'+t.refuse+'</p>');
+    html+=blk('重复操作结果','重复','<p>'+t.repeat+'</p>');
+    html+=blk('测试重点','测试','<p class="dim">'+t.tests+'</p>');
+    if(s.id==='s10'||s.id==='s11'||s.id==='s12'){
+      html+='<div class="blk"><h3><span class="tag-t">对比</span>CASE 切换</h3><div class="case-row">'+
+        SC.filter(x=>x.id>='s10'&&x.id<='s12').map((c,i)=>'<button class="btn small case-jump" data-go="'+c.id+'">CASE'+(i+1)+'</button>').join('')+'</div></div>';
+    }
+    if(s.id==='s13'){
+      html+='<div class="blk"><h3><span class="tag-t">模拟</span>冲突弹窗与工单（可点击）</h3>'+
+        '<p class="dim">点击按钮模拟冲突弹窗；提交工单后观察状态变化与重复提交提示。</p>'+
+        '<button class="btn primary" id="open-conflict">模拟：出现账号冲突</button>'+
+        '<div class="status info" id="ticket-status"></div></div>';
+      html+='<div class="blk"><h3><span class="tag-t">边界</span>异常和重复操作对照表</h3><table class="ex"><tr><th>场景</th><th>是否创建账号</th><th>是否写绑定</th><th>登录状态</th><th>停留位置</th><th>是否允许重试</th></tr>'+
+        EXCEPTIONS.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+r[5]+'</td></tr>').join('')+'</table></div>';
+    }
+    html+='</section>';
+    return html;
+  }).join('');
+  document.querySelectorAll('[data-flow]').forEach(el=>{ el.innerHTML=renderFlow(el.getAttribute('data-flow')); });
+}
+const FLOW_NOTE={
+  s1:'开关状态影响虚线以上分支：开关关 → 授权识别后直接按判断表完成登录；开关开 → 仅在账号缺少有效手机号时才要求验证。',
+  s2:'顺序固定：先识别微信账号 → 判断是否缺手机号 → 确实缺少才申请手机号授权（不能先弹手机号授权再查账号）。',
+  s5:'换号确认完成前，账号 A 保留原手机号；新手机号属于其他账号 → 进入冲突。',
+  s7:'openID 只能在所属 AppID 内使用；两键命中不同账号 → 冲突。上方「统一身份判断表」可点击模拟五种组合。',
+  s10:'登录顺序调换（先小程序后 APP），结果必须一致。'
+};
+/* ═══════════ 交互 ═══════════ */
+function show(id,push){
+  const idx=SC.findIndex(x=>x.id===id); if(idx<0) return;
+  if(state.cur&&state.cur!==id&&push!==false) state.hist.push(state.cur);
+  state.cur=id;
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show'));
+  document.getElementById('p-'+id).classList.add('show');
+  document.querySelectorAll('.tab').forEach(t=>{ const on=t.getAttribute('data-go')===id; t.classList.toggle('active',on); t.setAttribute('aria-selected',on); });
+  const tb=document.querySelector('.tab[data-go="'+id+'"]');
+  if(tb&&tb.scrollIntoView) tb.scrollIntoView({block:'nearest',inline:'nearest'});
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function buildTabs(){
+  document.getElementById('tabs').innerHTML=SC.map((s,i)=>'<button class="tab" role="tab" data-go="'+s.id+'">情景'+(i+1)+' · '+esc(s.name)+'</button>').join('');
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>show(t.getAttribute('data-go'))));
+}
+function buildMatrix(){
+  document.getElementById('mx-btns').innerHTML=MATRIX.map((m,i)=>'<button class="mx-btn" data-mx="'+i+'">'+(i+1)+'. '+m.k+'</button>').join('');
+  document.querySelectorAll('.mx-btn').forEach(b=>b.addEventListener('click',()=>{
+    const i=+b.getAttribute('data-mx'), m=MATRIX[i];
+    state.mx=i;
+    document.querySelectorAll('.mx-btn').forEach(x=>x.classList.toggle('active',+x.getAttribute('data-mx')===i));
+    const out=document.getElementById('mx-out');
+    out.className='mx-out show '+(m.r==='bad'?'bad':'ok');
+    out.innerHTML='<b>'+(i+1)+'. '+m.k+'</b><br>'+m.t;
+  }));
+}
+function setSwitch(v){
+  state.sw=v;
+  const sw=document.getElementById('sw');
+  sw.classList.toggle('on',v); sw.setAttribute('aria-checked',v);
+  document.getElementById('sw-val').textContent=v?'开':'关';
+  document.querySelectorAll('[data-flow]').forEach(el=>{ el.innerHTML=renderFlow(el.getAttribute('data-flow')); });
+}
+function ticketStatus(){
+  const el=document.getElementById('ticket-status');
+  if(state.ticket){ el.className='status show ok'; el.innerHTML='工单已提交：<b>'+state.ticket.id+'</b>（同一组冲突不会重复建单）。客服将完成双方身份核验，核验前两个账号保持独立。'; }
+  else{ el.className='status show info'; el.innerHTML='当前没有提交过工单。冲突出现时保留两个账号与当前登录状态，可提交工单由客服处理。'; }
+}
+function wire(){
+  document.getElementById('sw').addEventListener('click',()=>setSwitch(!state.sw));
+  document.getElementById('btn-back').addEventListener('click',()=>{ const prev=state.hist.pop(); if(prev) show(prev,false); });
+  document.getElementById('btn-reset').addEventListener('click',()=>{
+    state.sw=true; state.ticket=null; state.mx=null; state.hist=[];
+    setSwitch(true); buildMatrix(); ticketStatus(); show('s1',false);
+    document.getElementById('mx-out').className='mx-out';
+    document.querySelectorAll('.mx-btn').forEach(x=>x.classList.remove('active'));
+  });
+  document.getElementById('open-conflict').addEventListener('click',()=>{
+    document.getElementById('mask').classList.add('show');
+    document.getElementById('m-dup').style.display='none';
+    document.getElementById('m-ok').style.display=state.ticket?'block':'none';
+    if(state.ticket){ document.getElementById('m-ok').style.display='block'; document.getElementById('m-ok-id').textContent=state.ticket.id; }
+  });
+  document.getElementById('m-close').addEventListener('click',()=>document.getElementById('mask').classList.remove('show'));
+  document.getElementById('mask').addEventListener('click',e=>{ if(e.target.id==='mask') document.getElementById('mask').classList.remove('show'); });
+  document.getElementById('m-submit').addEventListener('click',()=>{
+    if(state.ticket){
+      document.getElementById('m-dup').style.display='block';
+      document.getElementById('m-dup-id').textContent=state.ticket.id;
+      return;
+    }
+    const id='GD-20260924-001';
+    state.ticket={id:id};
+    document.getElementById('m-ok').style.display='block';
+    document.getElementById('m-ok-id').textContent=id;
+    ticketStatus();
+  });
+  document.addEventListener('click',e=>{
+    const j=e.target.closest('.case-jump'); if(j) show(j.getAttribute('data-go'));
+  });
+}
+/* ═══════════ 初始化 ═══════════ */
+buildTabs();
+buildPanels();
+buildMatrix();
+wire();
+show('s1',false);
+ticketStatus();
+</script>
+</body>
+</html>

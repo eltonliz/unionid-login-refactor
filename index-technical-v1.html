@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>登录账号重构·UnionID 身份决策台</title>
+  <!--
+    产品假设：
+    1. 这是给老板、产品、研发和测试共同评审的业务逻辑原型。
+    2. 内部 user_id/account_id 是业务主键；UnionID 和手机号仅是身份凭证。
+    3. V1 不调真实微信 API，不执行真实数据合并。
+    4. 视觉采用克制的企业 SaaS 风格，强调可读性与决策路径。
+  -->
+  <style>
+    :root{--bg:#f4f7f8;--panel:#fff;--ink:#17242d;--muted:#687782;--line:#dce4e7;--soft:#edf3f4;--brand:#0c7480;--brand-strong:#075864;--brand-soft:#e6f3f3;--ok:#18794e;--ok-soft:#e9f6ef;--warn:#9a5b13;--warn-soft:#fff4df;--danger:#b63d46;--danger-soft:#fff0f1;--shadow:0 12px 30px rgba(22,45,55,.07);--radius:14px}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:"MiSans","PingFang SC","Noto Sans CJK SC",sans-serif;font-size:15px;line-height:1.65}button,select{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}:focus-visible{outline:3px solid rgba(12,116,128,.28);outline-offset:2px}
+    .topbar{position:sticky;top:0;z-index:40;height:64px;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+    .topbar-inner{max-width:1320px;height:100%;margin:auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{display:flex;align-items:center;gap:12px;font-weight:700}.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--brand);display:grid;place-items:center;color:#fff;font-size:12px;letter-spacing:.08em}.brand-sub{font-size:12px;color:var(--muted);font-weight:500}.top-meta{display:flex;align-items:center;gap:10px}.chip{display:inline-flex;align-items:center;min-height:28px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:12px}.chip.strong{color:var(--brand-strong);border-color:#b8d7d9;background:var(--brand-soft)}
+    .layout{max-width:1320px;margin:0 auto;padding:28px;display:grid;grid-template-columns:230px minmax(0,1fr);gap:26px}.sidebar{position:sticky;top:92px;align-self:start}.side-title{font-size:11px;color:#87949d;letter-spacing:.12em;margin:0 12px 10px}.side-nav{display:grid;gap:4px}.side-nav a{padding:9px 12px;border-radius:9px;color:#5c6c76;font-size:13px}.side-nav a:hover,.side-nav a.active{background:#e6eff0;color:var(--brand-strong);font-weight:650}.side-note{margin-top:20px;padding:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.main{min-width:0}.hero{position:relative;overflow:hidden;background:#12343b;color:#fff;border-radius:20px;padding:36px 40px;box-shadow:var(--shadow)}.hero:after{content:"";position:absolute;right:-90px;top:-150px;width:360px;height:360px;border-radius:50%;border:72px solid rgba(104,207,206,.12)}.eyebrow{position:relative;z-index:1;font:600 11px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.14em;color:#9bd3d4}.hero h1{position:relative;z-index:1;margin:14px 0 12px;max-width:740px;font-size:34px;line-height:1.23;letter-spacing:-.03em;text-wrap:balance}.hero p{position:relative;z-index:1;max-width:780px;margin:0;color:#d7e5e6;font-size:16px}.hero-rule{position:relative;z-index:1;margin-top:26px;padding:15px 18px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);border-radius:12px;display:flex;gap:12px;align-items:flex-start}.hero-rule strong{white-space:nowrap;color:#fff}.hero-rule span{color:#dce9ea}
+    .section{scroll-margin-top:86px;margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 4px 18px rgba(30,50,60,.035)}.section-head{padding:24px 26px 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.section-kicker{font:600 11px/1.3 ui-monospace,SFMono-Regular,monospace;color:var(--brand);letter-spacing:.12em}.section h2{margin:6px 0 3px;font-size:22px;letter-spacing:-.02em}.section-desc{margin:0;color:var(--muted);font-size:13px}.section-body{padding:24px 26px}.label{font-size:12px;color:var(--muted);margin-bottom:7px}.note{padding:13px 15px;border-radius:10px;background:var(--soft);color:#53636d;font-size:13px}.note.danger{background:var(--danger-soft);color:#91343b}.note.warn{background:var(--warn-soft);color:#78470e}.badge{display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:2px 8px;border-radius:6px;background:var(--soft);color:#5a6a74;font-size:11px;font-weight:700;letter-spacing:.03em}.badge.ok{background:var(--ok-soft);color:var(--ok)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.danger{background:var(--danger-soft);color:var(--danger)}
+    .btn{min-height:40px;border:1px solid var(--line);border-radius:9px;padding:8px 14px;background:#fff;color:var(--ink);font-weight:650}.btn:hover{background:#f7fafb}.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}.btn.primary:hover{background:var(--brand-strong)}.btn.danger{border-color:#e8b4b8;color:var(--danger);background:#fff8f8}.btn.ghost{border-color:transparent;color:var(--brand);background:transparent}.btn:disabled{cursor:not-allowed;opacity:.45}.actions{display:flex;gap:10px;flex-wrap:wrap}.divider{height:1px;background:var(--line);margin:22px 0}
+    .concepts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:12px;overflow:hidden}.concept{padding:18px;border-right:1px solid var(--line);background:#fff}.concept:last-child{border-right:0}.concept .code{font:700 12px/1.3 ui-monospace,SFMono-Regular,monospace;color:var(--brand)}.concept h3{font-size:15px;margin:9px 0 6px}.concept p{font-size:12.5px;color:var(--muted);margin:0}.principle{margin-top:18px;display:grid;grid-template-columns:145px 1fr;gap:16px;align-items:start}.principle strong{font-size:13px}.principle p{margin:0;color:#4c5e68}
+    .setting{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:20px}.setting-card{border:1px solid var(--line);border-radius:12px;padding:20px}.setting-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}.setting-row h3{margin:0 0 6px;font-size:16px}.setting-row p{margin:0;color:var(--muted);font-size:13px}.switch{position:relative;width:48px;height:28px;flex:0 0 auto}.switch input{position:absolute;opacity:0}.switch-ui{display:block;width:48px;height:28px;border-radius:999px;background:#c9d3d7;transition:.2s}.switch-ui:after{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18);transition:.2s}.switch input:checked+.switch-ui{background:var(--brand)}.switch input:checked+.switch-ui:after{transform:translateX(20px)}.policy-result{background:#f8fafb;border:1px dashed #c8d6da;border-radius:12px;padding:19px}.policy-result h3{margin:8px 0 5px}.policy-result p{margin:0;color:var(--muted);font-size:13px}.policy-list{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:8px}.policy-list li{display:grid;grid-template-columns:74px 1fr;gap:10px;font-size:12.5px}.policy-list strong{color:#42535e}
+    .tabs{display:flex;gap:4px;padding:4px;background:var(--soft);border-radius:10px;width:max-content;max-width:100%;overflow:auto}.tab{white-space:nowrap;border:0;background:transparent;border-radius:7px;padding:8px 13px;color:#61717b;font-weight:650}.tab.active{background:#fff;color:var(--brand-strong);box-shadow:0 1px 4px rgba(25,45,55,.12)}.tab-panel{display:none;margin-top:20px}.tab-panel.active{display:block}.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:22px;align-items:stretch}.flow-step{position:relative;border:1px solid var(--line);border-radius:11px;padding:16px;background:#fff;min-height:142px}.flow-step:not(:last-child):after{content:"";position:absolute;top:50%;right:-23px;width:23px;height:1px;background:#aab8bd}.flow-step:not(:last-child):before{content:"";position:absolute;top:calc(50% - 3px);right:-23px;border:4px solid transparent;border-left-color:#aab8bd;transform:translateX(8px)}.step-no{font:700 11px/1 ui-monospace,SFMono-Regular,monospace;color:var(--brand)}.flow-step h3{margin:12px 0 7px;font-size:14px}.flow-step p{margin:0;color:var(--muted);font-size:12px}.flow-step.decision{background:#f3f9f9;border-color:#bbd8da}.flow-step.block{background:var(--danger-soft);border-color:#eabec1}.flow-foot{margin-top:18px;display:flex;justify-content:space-between;gap:14px;align-items:center;color:var(--muted);font-size:12.5px}
+    .simulator{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr);gap:22px}.sim-form{border:1px solid var(--line);border-radius:12px;padding:20px}.field{margin-bottom:16px}.field label{display:block;font-size:12px;color:#556670;margin-bottom:7px}.field select{width:100%;height:42px;border:1px solid #cfdadd;border-radius:9px;padding:0 12px;background:#fff;color:var(--ink)}.preset-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}.preset{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 9px;color:#5c6d77;font-size:11px}.preset:hover{border-color:#9bbfc2;color:var(--brand)}.result{border:1px solid var(--line);border-radius:12px;padding:22px;background:#fbfcfc;display:flex;flex-direction:column;min-height:290px}.result-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.result h3{margin:12px 0 6px;font-size:20px}.result p{margin:0;color:var(--muted)}.result-steps{margin:20px 0 0;padding:0;list-style:none;display:grid;gap:9px}.result-steps li{display:grid;grid-template-columns:25px 1fr;gap:9px;align-items:start;font-size:13px}.result-steps i{font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:#566872;font-size:11px;font-weight:700}.result-actions{margin-top:auto;padding-top:22px}.result.state-create{background:#f8fbfb}.result.state-bind{background:var(--brand-soft);border-color:#b7d8da}.result.state-login{background:var(--ok-soft);border-color:#b9dec9}.result.state-conflict{background:var(--danger-soft);border-color:#eab9bd}
+    .matrix{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:22px}.matrix th,.matrix td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:top}.matrix th{background:#f6f8f9;color:#52636d;font-weight:700}.matrix tr:last-child td{border-bottom:0}.matrix tr.conflict td{background:#fff6f6}
+    .case-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.case-tab{border:1px solid var(--line);background:#fff;border-radius:10px;padding:14px;text-align:left}.case-tab span{display:block;font:700 11px/1 ui-monospace,SFMono-Regular,monospace;color:var(--brand);margin-bottom:7px}.case-tab strong{font-size:13px}.case-tab.active{border-color:#86b9bd;background:var(--brand-soft)}.case-panel{display:none;margin-top:18px}.case-panel.active{display:grid;grid-template-columns:1fr 1fr;gap:18px}.case-side{border:1px solid var(--line);border-radius:11px;padding:18px}.case-side h3{margin:0 0 12px;font-size:15px}.identity-line{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid #edf1f2;font-size:12.5px}.identity-line:last-child{border-bottom:0}.identity-line span{color:var(--muted)}.case-verdict{margin-top:15px;padding:13px 14px;background:var(--brand-soft);border-radius:9px;color:#2a5960;font-size:13px}.case-rules{margin:0;padding-left:20px;color:#4f606a}.case-rules li{margin:8px 0}
+    .event-table{width:100%;border-collapse:collapse}.event-table th,.event-table td{padding:13px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:12.5px}.event-table th{color:#586a74;font-size:11px;letter-spacing:.04em}.event-table tr:last-child td{border-bottom:0}.event-name{font-weight:700;color:#324650}.strategy{font-weight:700}.strategy.allow{color:var(--ok)}.strategy.soft{color:var(--warn)}.strategy.separate{color:var(--brand)}
+    .conflict-demo{display:grid;grid-template-columns:1fr 70px 1fr;gap:18px;align-items:center}.account{border:1px solid var(--line);border-radius:12px;padding:19px}.account h3{margin:0 0 13px}.account dl{margin:0;display:grid;grid-template-columns:84px 1fr;gap:8px 12px;font-size:12.5px}.account dt{color:var(--muted)}.account dd{margin:0;font-weight:650}.vs{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--danger-soft);color:var(--danger);font:700 11px/1 ui-monospace,SFMono-Regular,monospace}.conflict-policy{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.policy-block{padding:15px;border:1px solid var(--line);border-radius:10px}.policy-block strong{display:block;font-size:13px;margin-bottom:5px}.policy-block span{font-size:12px;color:var(--muted)}
+    .contract-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.contract{border:1px solid var(--line);border-radius:11px;padding:18px}.contract h3{margin:0 0 12px;font-size:15px}.contract ul{margin:0;padding-left:18px;color:#50616b}.contract li{margin:7px 0}.code-block{margin-top:18px;background:#14272d;color:#d9e9ea;border-radius:11px;padding:18px;overflow:auto;font:12px/1.8 ui-monospace,SFMono-Regular,monospace}.code-block .k{color:#75ced0}.code-block .w{color:#f2c46f}.code-block .d{color:#ff9aa1}
+    .checks{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}.check{display:grid;grid-template-columns:24px 1fr;gap:10px;padding:12px 0;border-bottom:1px solid #edf1f2}.check-mark{width:20px;height:20px;border-radius:5px;border:1px solid #a9c6c8;background:var(--brand-soft);display:grid;place-items:center;color:var(--brand);font-size:11px;font-weight:800}.check strong{display:block;font-size:13px}.check span{font-size:12px;color:var(--muted)}
+    .footer{padding:24px 6px 52px;display:flex;justify-content:space-between;gap:20px;color:#7b8991;font-size:12px}.modal-backdrop{position:fixed;inset:0;z-index:80;background:rgba(16,31,38,.48);display:none;place-items:center;padding:20px}.modal-backdrop.open{display:grid}.modal{width:min(560px,100%);background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.24);overflow:hidden}.modal-head{padding:20px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px}.modal-head h3{margin:0;font-size:18px}.modal-close{width:34px;height:34px;border:0;background:var(--soft);border-radius:8px;color:#5a6b74}.modal-body{padding:22px}.modal-warning{padding:14px;background:var(--danger-soft);color:#85343a;border-radius:10px;font-size:13px}.modal-accounts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.modal-account{border:1px solid var(--line);border-radius:9px;padding:13px}.modal-account strong{display:block;font-size:13px}.modal-account span{display:block;color:var(--muted);font-size:12px;margin-top:4px}.modal-actions{padding:16px 22px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}.toast{position:fixed;right:24px;bottom:24px;z-index:100;background:#18353c;color:#fff;padding:12px 16px;border-radius:10px;box-shadow:var(--shadow);font-size:13px;transform:translateY(20px);opacity:0;pointer-events:none;transition:.2s}.toast.show{transform:none;opacity:1}
+    @media(max-width:1050px){.layout{grid-template-columns:1fr}.sidebar{display:none}.concepts{grid-template-columns:1fr 1fr}.concept:nth-child(2){border-right:0}.concept:nth-child(-n+2){border-bottom:1px solid var(--line)}.flow{grid-template-columns:1fr 1fr}.flow-step:after,.flow-step:before{display:none}.setting,.simulator{grid-template-columns:1fr}.contract-grid{grid-template-columns:1fr}}
+    @media(max-width:700px){body{font-size:14px}.topbar-inner{padding:0 16px}.brand-sub,.top-meta .chip:first-child{display:none}.layout{padding:14px}.hero{padding:28px 22px}.hero h1{font-size:28px}.hero-rule{display:block}.hero-rule strong{display:block;margin-bottom:6px}.section-head,.section-body{padding:20px 17px}.concepts,.flow,.case-panel.active,.case-tabs,.conflict-policy,.checks{grid-template-columns:1fr}.concept{border-right:0;border-bottom:1px solid var(--line)}.concept:last-child{border-bottom:0}.principle{grid-template-columns:1fr;gap:5px}.setting-row{gap:12px}.flow-foot,.footer{align-items:flex-start;flex-direction:column}.matrix-wrap,.event-wrap{overflow-x:auto}.matrix,.event-table{min-width:700px}.conflict-demo{grid-template-columns:1fr}.vs{margin:auto}.modal-accounts{grid-template-columns:1fr}.modal-actions{flex-direction:column-reverse}.modal-actions .btn{width:100%}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark">ID</span><span>账号身份决策台</span><span class="brand-sub">APP · 小程序</span></div>
+      <div class="top-meta"><span class="chip">业务原型</span><span class="chip strong">V1.0 待评审</span></div>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" aria-label="页面导航">
+      <p class="side-title">REVIEW OUTLINE</p>
+      <nav class="side-nav">
+        <a href="#overview" class="active">01 核心口径</a>
+        <a href="#policy">02 租户配置</a>
+        <a href="#flows">03 登录主流程</a>
+        <a href="#resolver">04 身份决策器</a>
+        <a href="#cases">05 极端 CASE</a>
+        <a href="#events">06 关键事件</a>
+        <a href="#conflict">07 冲突处理</a>
+        <a href="#contract">08 研发契约</a>
+        <a href="#acceptance">09 验收标准</a>
+      </nav>
+      <div class="side-note">本页模拟业务规则，不调用微信真实接口，不执行真实账号合并。</div>
+    </aside>
+    <main class="main">
+      <section class="hero" id="overview">
+        <div class="eyebrow">UNIONID ACCOUNT RESOLUTION</div>
+        <h1>把“登录方式”与“业务账号”分开</h1>
+        <p>系统始终登录内部 user_id。UnionID、OpenID 和手机号都是找到 user 的已验证凭证，不是业务数据主键。</p>
+        <div class="hero-rule"><strong>一条总规则</strong><span>UnionID 与手机号指向同一用户则登录；只命中一边则补绑；分别命中两个用户则立即停止，进入账号冲突。</span></div>
+      </section>
+
+      <section class="section" aria-labelledby="conceptTitle">
+        <div class="section-head"><div><div class="section-kicker">01 / FOUNDATION</div><h2 id="conceptTitle">四个概念，不能混用</h2><p class="section-desc">先统一身份定义，再讨论登录与合并。</p></div><span class="badge ok">口径已固化</span></div>
+        <div class="section-body">
+          <div class="concepts">
+            <article class="concept"><div class="code">ACCOUNT_ID</div><h3>内部业务账号</h3><p>订单、会员、收藏、余额和权益的真正归属。永久不用外部凭证替代。</p></article>
+            <article class="concept"><div class="code">WECHAT_UNION</div><h3>UnionID</h3><p>同一微信开放平台账号范围内的跨 AppID 微信身份，用于 APP 与小程序识别。</p></article>
+            <article class="concept"><div class="code">WECHAT_CHANNEL</div><h3>AppID + OpenID</h3><p>单一应用渠道内的微信身份。OpenID 必须连同 AppID 保存，不做跨端兜底比较。</p></article>
+            <article class="concept"><div class="code">VERIFIED_PHONE</div><h3>已验证手机号</h3><p>登录与联系凭证，可能换号、共用或被回收，不能覆盖已存在的 UnionID 归属。</p></article>
+          </div>
+          <div class="principle"><strong>数据隔离原则</strong><p>可在平台层识别同一个 account，但每个租户必须建立独立 tenant_user。不得因 UnionID 相同跨租户带出订单、角色、通讯录和会员权益。</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="policy" aria-labelledby="policyTitle">
+        <div class="section-head"><div><div class="section-kicker">02 / TENANT POLICY</div><h2 id="policyTitle">租户配置：微信登录是否强制绑定手机号</h2><p class="section-desc">开关只控制微信登录时的手机号要求，不改变手机号本身的登录能力。</p></div><span class="badge" id="policyBadge">当前：关闭</span></div>
+        <div class="section-body">
+          <div class="setting">
+            <div class="setting-card">
+              <div class="setting-row"><div><h3>强制绑定手机号</h3><p>适用 APP 微信登录和小程序微信登录。获取手机号前仍需用户明确同意。</p></div><label class="switch"><input id="phonePolicy" type="checkbox" aria-label="微信登录是否强制绑定手机号"><span class="switch-ui"></span></label></div>
+              <div class="divider"></div>
+              <div class="note warn">开关不建议命名为“是否允许获取手机号”，因为“允许”是能力范围，“强制”是流程门槛，两者含义不同。</div>
+            </div>
+            <aside class="policy-result" aria-live="polite"><span class="badge" id="policyState">OPTIONAL</span><h3 id="policyResultTitle">允许 UnionID-only 用户</h3><p id="policyResultText">用户微信登录后可直接进入系统，不在登录阶段索取手机号。</p><ul class="policy-list"><li><strong>新用户</strong><span id="newUserPolicy">创建 WECHAT_ONLY 账号</span></li><li><strong>存量用户</strong><span id="existingUserPolicy">不追溯补绑</span></li><li><strong>关闭后</strong><span>不删除已有手机号</span></li></ul></aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="flows" aria-labelledby="flowTitle">
+        <div class="section-head"><div><div class="section-kicker">03 / LOGIN FLOWS</div><h2 id="flowTitle">两条登录主流程</h2><p class="section-desc">先校验凭证，再解析业务账号；登录顺序不能改变最终结果。</p></div><span class="badge ok">顺序无关</span></div>
+        <div class="section-body">
+          <div class="tabs" role="tablist"><button class="tab active" data-flow="wechat" role="tab" aria-selected="true">微信授权登录</button><button class="tab" data-flow="phone" role="tab" aria-selected="false">手机号登录后绑微信</button></div>
+          <div class="tab-panel active" data-flow-panel="wechat">
+            <div class="flow"><article class="flow-step"><div class="step-no">STEP 01</div><h3>校验微信凭证</h3><p>APP 校验 OAuth code；小程序校验 wx.login code。</p></article><article class="flow-step"><div class="step-no">STEP 02</div><h3>获取 UnionID</h3><p>同时保存渠道级 appid + openid，不用 OpenID 做跨端判断。</p></article><article class="flow-step decision"><div class="step-no">STEP 03</div><h3>查询身份归属</h3><p>先查 UnionID；若需手机号，再独立查询手机号归属。</p></article><article class="flow-step"><div class="step-no">STEP 04</div><h3>执行决策矩阵</h3><p>创建、补绑、登录或冲突。不得按先后顺序写分支。</p></article><article class="flow-step"><div class="step-no">STEP 05</div><h3>签发业务会话</h3><p>对最终 account_id 签发会话，再加载当前 tenant_user。</p></article></div>
+            <div class="flow-foot"><span id="wechatPolicyHint">当前开关关闭：UnionID 验证成功后可完成登录。</span><span class="badge">WECHAT_ONLY 可用</span></div>
+          </div>
+          <div class="tab-panel" data-flow-panel="phone">
+            <div class="flow"><article class="flow-step"><div class="step-no">STEP 01</div><h3>验证手机号</h3><p>验证码通过后查询或创建 PHONE_ONLY 账号。</p></article><article class="flow-step"><div class="step-no">STEP 02</div><h3>用户触发绑定</h3><p>在账号中心或确有跨端同步价值的场景发起，不一刀切拦截。</p></article><article class="flow-step"><div class="step-no">STEP 03</div><h3>获取 UnionID</h3><p>用户取消时保留原手机号会话，不新建用户。</p></article><article class="flow-step decision"><div class="step-no">STEP 04</div><h3>检查 UnionID 归属</h3><p>未占用则绑定当前用户；已属于当前用户则幂等成功。</p></article><article class="flow-step block"><div class="step-no">STEP 05</div><h3>其他用户已占用</h3><p>停止绑定，进入 IDENTITY_CONFLICT，不静默切换账号。</p></article></div>
+            <div class="flow-foot"><span>授权成功后保留原始 intent，回到用户刚才的操作。</span><span class="badge warn">拒绝不登出</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="resolver" aria-labelledby="resolverTitle">
+        <div class="section-head"><div><div class="section-kicker">04 / IDENTITY RESOLVER</div><h2 id="resolverTitle">身份命中决策器</h2><p class="section-desc">选择 UnionID 和手机号当前分别指向谁，系统给出唯一处理结果。</p></div><span class="badge">可交互</span></div>
+        <div class="section-body">
+          <div class="simulator">
+            <div class="sim-form">
+              <div class="field"><label for="unionHit">UnionID 归属查询结果</label><select id="unionHit"><option value="none">未命中任何用户</option><option value="A">命中用户 A</option><option value="B">命中用户 B</option></select></div>
+              <div class="field"><label for="phoneHit">已验证手机号归属查询结果</label><select id="phoneHit"><option value="none">未命中任何用户</option><option value="A">命中用户 A</option><option value="B">命中用户 B</option></select></div>
+              <div class="label">快速模拟</div><div class="preset-row"><button class="preset" data-u="none" data-p="none">全新用户</button><button class="preset" data-u="A" data-p="none">仅 UnionID 命中</button><button class="preset" data-u="none" data-p="A">仅手机号命中</button><button class="preset" data-u="A" data-p="A">同一用户</button><button class="preset" data-u="A" data-p="B">两个用户冲突</button></div>
+            </div>
+            <div class="result state-create" id="resolverResult" aria-live="polite"><div class="result-top"><div><span class="badge" id="resultBadge">CREATE</span><h3 id="resultTitle">创建一个新用户</h3></div><span class="chip" id="resultTarget">target: new account</span></div><p id="resultSummary">UnionID 和手机号都没有历史归属，可在一个事务中创建账号并绑定已验证凭证。</p><ol class="result-steps" id="resultSteps"></ol><div class="result-actions" id="resultActions"></div></div>
+          </div>
+          <div class="matrix-wrap"><table class="matrix"><thead><tr><th>UnionID 归属</th><th>手机号归属</th><th>最终结果</th><th>禁止动作</th></tr></thead><tbody><tr><td>未命中</td><td>未命中</td><td>创建 1 个用户</td><td>分别创建两个用户</td></tr><tr><td>用户 A</td><td>未命中</td><td>登录 A，可补绑手机号</td><td>因新手机号再建账号</td></tr><tr><td>未命中</td><td>用户 A</td><td>登录 A，绑定 UnionID</td><td>新建微信用户</td></tr><tr><td>用户 A</td><td>用户 A</td><td>直接登录 A</td><td>重复写入或重复发权益</td></tr><tr class="conflict"><td>用户 A</td><td>用户 B</td><td>进入账号冲突</td><td>自动合并、覆盖、新建第三个用户</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="section" id="cases" aria-labelledby="caseTitle">
+        <div class="section-head"><div><div class="section-kicker">05 / EDGE CASES</div><h2 id="caseTitle">三个极端 CASE 的正确口径</h2><p class="section-desc">不用“反之也是”写逻辑；无论先 APP 还是先小程序，同一组凭证都得到同一结果。</p></div><span class="badge warn">双手机号重点</span></div>
+        <div class="section-body">
+          <div class="case-tabs" role="tablist"><button class="case-tab active" data-case="1" role="tab" aria-selected="true"><span>CASE 01</span><strong>手机号 139 先登录</strong></button><button class="case-tab" data-case="2" role="tab" aria-selected="false"><span>CASE 02</span><strong>UnionID + 手机号 138</strong></button><button class="case-tab" data-case="3" role="tab" aria-selected="false"><span>CASE 03</span><strong>小程序先登录</strong></button></div>
+          <div class="case-panel active" data-case-panel="1"><div class="case-side"><h3>已有状态</h3><div class="identity-line"><span>APP</span><strong>PHONE_ONLY</strong></div><div class="identity-line"><span>手机号</span><strong>139****0139</strong></div><div class="identity-line"><span>UnionID</span><strong>未绑定</strong></div><div class="case-verdict">小程序号码也是 139，且 UnionID 未占用时，才可将 UnionID 绑定到原用户。</div></div><div class="case-side"><h3>处理规则</h3><ol class="case-rules"><li>先查 UnionID 是否已属于其他用户。</li><li>手机号相同只是绑定候选，需确保本次凭证有效。</li><li>若手机号不同且 UnionID 无历史，无法证明是同一人，可作为独立用户。</li><li>若 UnionID 已属于其他账号，不得自动合并。</li></ol></div></div>
+          <div class="case-panel" data-case-panel="2"><div class="case-side"><h3>已有状态</h3><div class="identity-line"><span>APP</span><strong>ACTIVE_BOUND</strong></div><div class="identity-line"><span>UnionID</span><strong>U-1024</strong></div><div class="identity-line"><span>手机号</span><strong>138****0138</strong></div><div class="case-verdict">小程序取得同一 U-1024 时，已确定是同一微信身份；手机号不同不能再创建用户。</div></div><div class="case-side"><h3>处理规则</h3><ol class="case-rules"><li>UnionID 相同：登录已有用户。</li><li>新手机号未占用：进入换号或新号码确认，不自动覆盖。</li><li>新手机号已属于其他用户：进入 IDENTITY_CONFLICT。</li><li>禁止“手机号≠138就新建用户”。</li></ol></div></div>
+          <div class="case-panel" data-case-panel="3"><div class="case-side"><h3>已有状态</h3><div class="identity-line"><span>小程序</span><strong>WECHAT_ONLY</strong></div><div class="identity-line"><span>UnionID</span><strong>U-2048</strong></div><div class="identity-line"><span>手机号</span><strong>未采集</strong></div><div class="case-verdict">APP 手机号用户后续绑微信时，比较新取得的 UnionID，不比较 APP 与小程序 OpenID。</div></div><div class="case-side"><h3>处理规则</h3><ol class="case-rules"><li>UnionID 相同：是同一微信身份。</li><li>若两端已形成两个 user_id，进入账号归一或冲突流程。</li><li>UnionID 不同：不自动合并。</li><li>无 UnionID：暂时无法跨端判断，不得退化为比较 OpenID。</li></ol></div></div>
+        </div>
+      </section>
+
+      <section class="section" id="events" aria-labelledby="eventTitle">
+        <div class="section-head"><div><div class="section-kicker">06 / TRIGGER POLICY</div><h2 id="eventTitle">关键事件不应一刀切强制微信授权</h2><p class="section-desc">用户已通过手机号登录，除非动作本身依赖微信身份，否则不应为了补数据而中断操作。</p></div><span class="badge danger">需修正原需求</span></div>
+        <div class="section-body"><div class="event-wrap"><table class="event-table"><thead><tr><th>事件</th><th>是否依赖微信身份</th><th>推荐处理</th><th>用户拒绝后</th></tr></thead><tbody><tr><td class="event-name">观看直播</td><td>通常不依赖</td><td><span class="strategy allow">直接进入</span>；互动、领权益时按具体业务校验</td><td>不影响观看</td></tr><tr><td class="event-name">收藏</td><td>不依赖，手机号账号已可记录</td><td><span class="strategy allow">先完成收藏</span>；可在账号中心提示绑微信</td><td>保留收藏结果</td></tr><tr><td class="event-name">分享</td><td>分享 SDK 不等于微信登录</td><td><span class="strategy allow">不强制 OAuth</span>；如有分享奖励再单独规定</td><td>仍可分享</td></tr><tr><td class="event-name">通讯录</td><td>依赖手机系统通讯录权限</td><td><span class="strategy separate">走系统权限流程</span>，与微信身份授权分开</td><td>展示手动搜索/添加方案</td></tr><tr><td class="event-name">我的</td><td>不依赖，已有登录态</td><td><span class="strategy soft">展示绑定入口</span>，说明“用于跨端同步”</td><td>仍可访问我的</td></tr><tr><td class="event-name">立即购买</td><td>购买依赖业务账号，不必然依赖微信身份</td><td><span class="strategy allow">使用当前账号下单</span>；联系号码按订单规则校验</td><td>不应因拒绝绑微信阻断下单</td></tr></tbody></table></div><div class="note warn" style="margin-top:18px">推荐的一次性绑定触发点：账号中心主动绑定、用户主动开启跨端同步，或从 APP 跳转小程序前明确告知。不把六个普通入口全部变成强制拦截点。</div></div>
+      </section>
+
+      <section class="section" id="conflict" aria-labelledby="conflictTitle">
+        <div class="section-head"><div><div class="section-kicker">07 / CONFLICT HANDLING</div><h2 id="conflictTitle">两个已有账号：停止自动处理</h2><p class="section-desc">当 UnionID 指向 A、手机号指向 B 时，这不是“新用户”，而是账号归属冲突。</p></div><button class="btn danger" id="openConflict">预览冲突弹窗</button></div>
+        <div class="section-body"><div class="conflict-demo"><div class="account"><span class="badge">ACCOUNT A</span><h3>微信身份账号</h3><dl><dt>UnionID</dt><dd>U-1024</dd><dt>手机号</dt><dd>138****0138</dd><dt>业务数据</dt><dd>收藏、课程权益</dd></dl></div><div class="vs">STOP</div><div class="account"><span class="badge">ACCOUNT B</span><h3>手机号登录账号</h3><dl><dt>UnionID</dt><dd>未绑定</dd><dt>手机号</dt><dd>139****0139</dd><dt>业务数据</dt><dd>已支付订单、退款中</dd></dl></div></div><div class="conflict-policy"><div class="policy-block"><strong>立即阻止</strong><span>不覆盖 UnionID、不切换当前会话、不创建第三个用户。</span></div><div class="policy-block"><strong>升级验证</strong><span>需同时验证两个账号的控制权，高风险场景转人工。</span></div><div class="policy-block"><strong>受控合并</strong><span>选定 canonical account，保留 merge_record，业务资产按类型迁移。</span></div></div></div>
+      </section>
+
+      <section class="section" id="contract" aria-labelledby="contractTitle">
+        <div class="section-head"><div><div class="section-kicker">08 / DELIVERY CONTRACT</div><h2 id="contractTitle">研发实现契约</h2><p class="section-desc">前端只展示状态和收集授权；最终身份归属必须由后端在事务中决定。</p></div><span class="badge ok">可交研发</span></div>
+        <div class="section-body"><div class="contract-grid"><article class="contract"><h3>最小数据模型</h3><ul><li><code>account</code>：平台内部业务账号。</li><li><code>auth_identity</code>：PHONE、WECHAT_UNION、WECHAT_CHANNEL 与 account 的绑定。</li><li><code>tenant_user</code>：租户内资料、角色和业务数据。</li><li><code>merge_record</code>：冲突、验证、合并和回滚审计。</li></ul></article><article class="contract"><h3>服务端强约束</h3><ul><li>对开放平台命名空间 + UnionID 建唯一约束。</li><li>对 appid + openid 建唯一约束。</li><li>身份查询、创建、绑定在同一事务内完成。</li><li>每次授权流程使用 auth_flow_id 幂等，防止并发重复建号。</li></ul></article></div><pre class="code-block"><span class="k">resolveIdentity</span>(openPlatformId, unionId, verifiedPhone, tenantId) {
+  unionAccount = findByUnion(openPlatformId, unionId)
+  phoneAccount = findByPhone(verifiedPhone)
+
+  if (!unionAccount && !phoneAccount) return <span class="w">CREATE_ONE_ACCOUNT</span>
+  if ( unionAccount && !phoneAccount) return <span class="w">LOGIN_AND_CONFIRM_PHONE</span>
+  if (!unionAccount &&  phoneAccount) return <span class="w">BIND_UNION_AND_LOGIN</span>
+  if (unionAccount.id === phoneAccount.id) return <span class="k">LOGIN_EXISTING</span>
+  return <span class="d">IDENTITY_CONFLICT</span>
+}</pre><div class="note" style="margin-top:18px">“合并账号”不等于批量改历史表的 user_id。有资产账号建议保留原始记录，通过 canonical account / merged alias 统一未来登录入口。</div></div>
+      </section>
+
+      <section class="section" id="acceptance" aria-labelledby="acceptanceTitle">
+        <div class="section-head"><div><div class="section-kicker">09 / ACCEPTANCE</div><h2 id="acceptanceTitle">必须通过的验收场景</h2><p class="section-desc">测试不只看能不能登录，还要验证账号归属、历史数据与异常状态。</p></div><span class="badge">8 类用例</span></div>
+        <div class="section-body"><div class="checks"><div class="check"><span class="check-mark">1</span><div><strong>顺序无关</strong><span>同一组凭证先 APP 或先小程序，最终归属一致。</span></div></div><div class="check"><span class="check-mark">2</span><div><strong>同 UnionID 异手机号</strong><span>不新建用户，进入换号或手机号冲突。</span></div></div><div class="check"><span class="check-mark">3</span><div><strong>同手机号异 UnionID</strong><span>已有微信归属冲突时不覆盖、不自动合并。</span></div></div><div class="check"><span class="check-mark">4</span><div><strong>两个已有账号</strong><span>进入 IDENTITY_CONFLICT，不产生第三个账号。</span></div></div><div class="check"><span class="check-mark">5</span><div><strong>拒绝授权</strong><span>保留原会话，不建号、不半绑定、不丢失原操作状态。</span></div></div><div class="check"><span class="check-mark">6</span><div><strong>重复/并发授权</strong><span>多次回调幂等，不重复创建用户或发放权益。</span></div></div><div class="check"><span class="check-mark">7</span><div><strong>租户隔离</strong><span>同 UnionID 不能跨 tenant_id 带出订单、角色和通讯录。</span></div></div><div class="check"><span class="check-mark">8</span><div><strong>开关变更</strong><span>从关到开有明确的存量补绑节点；从开到关不删历史手机号。</span></div></div></div></div>
+      </section>
+
+      <footer class="footer"><span>用于业务评审·非生产系统</span><span>口径基线：2026-09-24</span></footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="conflictModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <div class="modal-head"><div><span class="badge danger">IDENTITY_CONFLICT</span><h3 id="modalTitle">发现两个已有账号</h3></div><button class="modal-close" id="closeModal" aria-label="关闭">×</button></div>
+      <div class="modal-body">
+        <div class="modal-warning">UnionID 已属于用户 A，当前手机号已属于用户 B。系统不会自动覆盖、新建第三个用户或迁移资产。</div>
+        <div class="modal-accounts"><div class="modal-account"><strong>用户 A·微信账号</strong><span>UnionID: U-1024</span><span>存在收藏和课程权益</span></div><div class="modal-account"><strong>用户 B·手机号账号</strong><span>Phone: 139****0139</span><span>存在已支付订单</span></div></div>
+      </div>
+      <div class="modal-actions"><button class="btn" data-modal-action="keep">保留当前账号</button><button class="btn primary" data-modal-action="verify">发起双重验证</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    const phonePolicy = document.querySelector('#phonePolicy');
+    const policyBadge = document.querySelector('#policyBadge');
+    const policyState = document.querySelector('#policyState');
+    const policyResultTitle = document.querySelector('#policyResultTitle');
+    const policyResultText = document.querySelector('#policyResultText');
+    const newUserPolicy = document.querySelector('#newUserPolicy');
+    const existingUserPolicy = document.querySelector('#existingUserPolicy');
+    const wechatPolicyHint = document.querySelector('#wechatPolicyHint');
+
+    function renderPhonePolicy() {
+      const required = phonePolicy.checked;
+      policyBadge.textContent = required ? '当前：开启' : '当前：关闭';
+      policyBadge.className = `badge ${required ? 'warn' : ''}`;
+      policyState.textContent = required ? 'REQUIRED' : 'OPTIONAL';
+      policyState.className = `badge ${required ? 'warn' : ''}`;
+      policyResultTitle.textContent = required ? '微信登录必须补验手机号' : '允许 UnionID-only 用户';
+      policyResultText.textContent = required
+        ? '用户获取 UnionID 后进入 PENDING_PHONE，完成手机号验证与身份解析后才签发正式会话。'
+        : '用户微信登录后可直接进入系统，不在登录阶段索取手机号。';
+      newUserPolicy.textContent = required ? '先进入 PENDING_PHONE，验证后创建/绑定' : '创建 WECHAT_ONLY 账号';
+      existingUserPolicy.textContent = required ? '无手机号用户在下次登录时补绑' : '不追溯补绑';
+      wechatPolicyHint.textContent = required
+        ? '当前开关开启：无手机号用户需完成手机号验证后再登录。'
+        : '当前开关关闭：UnionID 验证成功后可完成登录。';
+    }
+    phonePolicy.addEventListener('change', renderPhonePolicy);
+    renderPhonePolicy();
+
+    document.querySelectorAll('[data-flow]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('[data-flow]').forEach((item) => {
+          const selected = item === button;
+          item.classList.toggle('active', selected);
+          item.setAttribute('aria-selected', String(selected));
+        });
+        document.querySelectorAll('[data-flow-panel]').forEach((item) => item.classList.remove('active'));
+        document.querySelector(`[data-flow-panel="${button.dataset.flow}"]`).classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('[data-case]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('[data-case]').forEach((item) => {
+          const selected = item === button;
+          item.classList.toggle('active', selected);
+          item.setAttribute('aria-selected', String(selected));
+        });
+        document.querySelectorAll('[data-case-panel]').forEach((item) => item.classList.remove('active'));
+        document.querySelector(`[data-case-panel="${button.dataset.case}"]`).classList.add('active');
+      });
+    });
+
+    const unionHit = document.querySelector('#unionHit');
+    const phoneHit = document.querySelector('#phoneHit');
+    const resolverResult = document.querySelector('#resolverResult');
+    const resultBadge = document.querySelector('#resultBadge');
+    const resultTitle = document.querySelector('#resultTitle');
+    const resultTarget = document.querySelector('#resultTarget');
+    const resultSummary = document.querySelector('#resultSummary');
+    const resultSteps = document.querySelector('#resultSteps');
+    const resultActions = document.querySelector('#resultActions');
+
+    const decisionCopy = {
+      create: {
+        state: 'state-create', badge: 'CREATE', title: '创建一个新用户', target: 'target: new account',
+        summary: 'UnionID 和手机号都没有历史归属，可在一个事务中创建账号并绑定已验证凭证。',
+        steps: ['创建 account_id', '绑定 UnionID 与已验证手机号', '创建当前 tenant_user', '记录注册来源与 auth_flow_id']
+      },
+      union: {
+        state: 'state-bind', badge: 'LOGIN + PHONE', title: '登录 UnionID 对应用户', target: 'target: account A',
+        summary: 'UnionID 已有明确归属，不得因出现新手机号而创建第二个微信用户。',
+        steps: ['登录 UnionID 指向的 account', '新手机号未占用时进入绑定/换号确认', '若账号已有另一手机号，不自动覆盖']
+      },
+      phone: {
+        state: 'state-bind', badge: 'BIND UNION', title: '将 UnionID 绑定到手机号用户', target: 'target: account A',
+        summary: '手机号已对应唯一用户，且 UnionID 未被占用，可将微信身份补充绑定到该用户。',
+        steps: ['再次确认 UnionID 未占用', '在事务中写入 auth_identity', '重复授权按 auth_flow_id 返回同一结果']
+      },
+      login: {
+        state: 'state-login', badge: 'LOGIN', title: '登录已有用户', target: 'target: same account',
+        summary: 'UnionID 与手机号指向同一 account，身份闭环已完整，直接签发当前租户会话。',
+        steps: ['不重复写入身份绑定', '不重复创建 tenant_user', '不重复发放新人权益']
+      },
+      conflict: {
+        state: 'state-conflict', badge: 'CONFLICT', title: '停止自动绑定与合并', target: 'target: manual resolution',
+        summary: 'UnionID 和手机号分别指向不同用户。系统无法仅凭当前一次授权决定资产归属。',
+        steps: ['保留当前会话与原操作状态', '记录 IDENTITY_CONFLICT 与冲突双方', '要求双重验证或转人工处理', '不新建第三个账号']
+      }
+    };
+
+    function resolveDecision() {
+      const union = unionHit.value;
+      const phone = phoneHit.value;
+      let key = 'create';
+      if (union !== 'none' && phone === 'none') key = 'union';
+      if (union === 'none' && phone !== 'none') key = 'phone';
+      if (union !== 'none' && phone !== 'none') key = union === phone ? 'login' : 'conflict';
+      const copy = decisionCopy[key];
+      resolverResult.className = `result ${copy.state}`;
+      resultBadge.textContent = copy.badge;
+      resultBadge.className = `badge ${key === 'login' ? 'ok' : key === 'conflict' ? 'danger' : key === 'create' ? '' : 'warn'}`;
+      resultTitle.textContent = copy.title;
+      resultTarget.textContent = copy.target.replace('A', union !== 'none' ? union : phone);
+      resultSummary.textContent = copy.summary;
+      resultSteps.innerHTML = copy.steps.map((step, index) => `<li><i>${index + 1}</i><span>${step}</span></li>`).join('');
+      resultActions.innerHTML = key === 'conflict'
+        ? '<button class="btn danger" id="resultConflictButton">预览冲突处理</button>'
+        : '<button class="btn primary" id="simulateButton">模拟执行结果</button>';
+      const actionButton = resultActions.querySelector('button');
+      actionButton.addEventListener('click', key === 'conflict' ? openConflictModal : () => showToast(`已模拟：${copy.title}`));
+    }
+    unionHit.addEventListener('change', resolveDecision);
+    phoneHit.addEventListener('change', resolveDecision);
+    document.querySelectorAll('.preset').forEach((button) => button.addEventListener('click', () => {
+      unionHit.value = button.dataset.u;
+      phoneHit.value = button.dataset.p;
+      resolveDecision();
+    }));
+
+    const conflictModal = document.querySelector('#conflictModal');
+    const closeModal = document.querySelector('#closeModal');
+    let lastFocused = null;
+    function openConflictModal() {
+      lastFocused = document.activeElement;
+      conflictModal.classList.add('open');
+      closeModal.focus();
+    }
+    function closeConflictModal() {
+      conflictModal.classList.remove('open');
+      if (lastFocused) lastFocused.focus();
+    }
+    document.querySelector('#openConflict').addEventListener('click', openConflictModal);
+    closeModal.addEventListener('click', closeConflictModal);
+    conflictModal.addEventListener('click', (event) => { if (event.target === conflictModal) closeConflictModal(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && conflictModal.classList.contains('open')) closeConflictModal(); });
+    document.querySelectorAll('[data-modal-action]').forEach((button) => button.addEventListener('click', () => {
+      const verify = button.dataset.modalAction === 'verify';
+      closeConflictModal();
+      showToast(verify ? '已进入双重验证演示；未执行真实合并' : '已保留当前账号；本次绑定已取消');
+    }));
+
+    const toast = document.querySelector('#toast');
+    let toastTimer = null;
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2400);
+    }
+
+    const navLinks = [...document.querySelectorAll('.side-nav a')];
+    const observedSections = navLinks.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`));
+    }, { rootMargin: '-70px 0px -60% 0px', threshold: [0.05, 0.2, 0.5] });
+    observedSections.forEach((section) => observer.observe(section));
+
+    resolveDecision();
+  </script>
+</body>
+</html>
