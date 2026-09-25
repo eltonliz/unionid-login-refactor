@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23176f75'/%3E%3Ctext x='32' y='42' font-size='24' font-family='monospace' font-weight='bold' text-anchor='middle' fill='white'%3EID%3C/text%3E%3C/svg%3E">
+  <title>一键登录重构 · 评审视图（原型 + 需求说明）</title>
+  <!--
+    评审视图：左侧内嵌场景流程台原型，右侧渲染同目录的需求说明 .md。
+    右栏内容在浏览器里实时读取 UnionID登录重构-需求说明.md，改 md 即同步，无需重新生成本页。
+    因此必须用 http 打开（GitHub Pages 或本地服务器）；双击本地文件时浏览器不允许读同目录文件。
+  -->
+  <style>
+    :root{
+      --bg:#f5f6f3;--surface:#fff;--ink:#1d2d2f;--muted:#647276;--soft:#879391;
+      --brand:#176f75;--brand-dark:#10575d;--brand-soft:#e5f1ef;--brand-line:#b9d4d1;
+      --line:#d9dfdc;--line-strong:#b9c4c1;--warn:#9f4933;--warn-soft:#f8ece7;
+      --ok:#276b52;--ok-soft:#e9f3ee;--paper:#f0f2ef;--radius:8px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+    button{font:inherit;color:inherit}
+    button:focus-visible,a:focus-visible{outline:3px solid rgba(23,111,117,.22);outline-offset:2px}
+
+    .review-bar{flex:0 0 auto;height:52px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 16px;border-bottom:1px solid var(--line);background:rgba(245,246,243,.96);backdrop-filter:blur(12px);z-index:10}
+    .bar-left{display:flex;align-items:center;gap:10px;min-width:0}
+    .brand-mark{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--brand);border-radius:6px;color:var(--brand);font:800 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;flex:0 0 auto}
+    .bar-left strong{font-size:14px;white-space:nowrap}
+    .bar-sub{color:var(--soft);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bar-right{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+    .bar-right a,.bar-right button{height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:5px;background:#fff;color:var(--muted);text-decoration:none;font-size:13px;cursor:pointer}
+    .bar-right a:hover,.bar-right button:hover{background:var(--ink);border-color:var(--ink);color:#fff}
+
+    .review-body{flex:1 1 auto;display:flex;min-height:0}
+    .pane-proto{flex:1 1 auto;min-width:0;background:var(--bg)}
+    .pane-proto iframe{display:block;width:100%;height:100%;border:0}
+    .splitter{flex:0 0 auto;width:6px;cursor:col-resize;background:var(--line);transition:background .15s}
+    .splitter:hover,.splitter.dragging{background:var(--brand)}
+
+    .pane-doc{flex:0 0 auto;width:38%;min-width:300px;min-height:0;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--surface)}
+    .doc-head{flex:0 0 auto;display:flex;align-items:baseline;gap:10px;padding:12px 20px;border-bottom:1px solid var(--line);background:#fafbf8}
+    .doc-head strong{font-size:14px;white-space:nowrap}
+    .doc-head span{color:var(--soft);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .doc{flex:1 1 auto;min-height:0;overflow:auto;padding:20px 22px 60px;font-size:14px;line-height:1.72}
+
+    .doc h1{margin:0 0 6px;font-family:"Songti SC","STSong",Georgia,serif;font-size:24px;line-height:1.3;font-weight:600;letter-spacing:-.01em}
+    .doc h2{margin:30px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line);font-size:19px;line-height:1.35}
+    .doc h3{margin:20px 0 8px;color:var(--brand-dark);font-size:15px;line-height:1.4}
+    .doc p{margin:0 0 9px}
+    .doc ol,.doc ul{margin:0 0 12px;padding-left:22px}
+    .doc li{margin-bottom:5px}
+    .doc ol>li::marker{color:var(--brand);font-weight:700}
+    .doc ul>li::marker{color:var(--soft)}
+    .doc strong{font-weight:700}
+    .doc code{padding:1px 5px;border-radius:3px;background:var(--paper);font:600 12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--brand-dark)}
+    .doc pre{margin:0 0 14px;padding:14px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+    .doc pre code{padding:0;background:none;color:var(--ink);font-weight:400;font-size:12px}
+    .doc table{width:100%;margin:0 0 14px;border-collapse:collapse;font-size:12.5px}
+    .doc th,.doc td{padding:8px 10px;border:1px solid var(--line);text-align:left;vertical-align:top}
+    .doc th{background:#f0f3f1;color:var(--muted);font-size:12px;white-space:nowrap}
+    .doc tbody tr:nth-child(even){background:#fcfdfb}
+
+    .doc-note{margin:0 0 14px;padding:14px 16px;border:1px solid var(--brand-line);background:var(--brand-soft);border-radius:6px;color:var(--brand-dark);font-size:13px}
+    .doc-error{margin:0;padding:16px;border:1px solid #e3b9aa;background:var(--warn-soft);border-radius:6px;color:var(--warn);font-size:13px}
+    .doc-error code{background:#fff}
+
+    .figure{margin:0 0 16px;padding:12px;border:1px solid var(--line);border-radius:6px;background:#fff}
+    .figure svg{display:block;width:100%;height:auto}
+    .figure figcaption{margin-top:8px;color:var(--soft);font-size:12px}
+    .flow-edge{fill:none;stroke:#647276;stroke-width:1.4}
+    .flow-edge.warn{stroke:#9f4933}
+    .flow-node{stroke-width:1.2}
+    .flow-node.start{fill:#edf2f0;stroke:#81918e}
+    .flow-node.step{fill:#fff;stroke:#1d2d2f}
+    .flow-node.decision{fill:#f0f2ef;stroke:#1d2d2f}
+    .flow-node.success{fill:#e5f1ef;stroke:#176f75}
+    .flow-node.warning{fill:#f8ece7;stroke:#9f4933}
+    .flow-text{fill:#1d2d2f;font-size:14px;font-weight:700}
+    .flow-text.warning{fill:#9f4933}
+    .flow-text.success{fill:#10575d}
+    .edge-mask{fill:#fff}
+    .edge-label{fill:#647276;font-size:12px;font-weight:700}
+    .edge-label.warn{fill:#9f4933}
+
+    body.doc-collapsed .pane-doc,body.doc-collapsed .splitter{display:none}
+
+    @media(max-width:900px){
+      .review-body{flex-direction:column}
+      .pane-proto{flex:1 1 55%;min-height:0}
+      .pane-doc{width:auto;max-width:none;flex:1 1 45%;min-width:0;min-height:0;border-left:0;border-top:1px solid var(--line)}
+      .splitter{display:none}
+      .bar-sub{display:none}
+    }
+    @media(max-width:640px){
+      .review-bar{height:auto;flex-wrap:wrap;gap:8px;padding:8px 12px}
+      .bar-right a span{display:none}
+    }
+  </style>
+</head>
+<body>
+  <header class="review-bar">
+    <div class="bar-left">
+      <span class="brand-mark">ID</span>
+      <strong>一键登录重构 · 评审视图</strong>
+      <span class="bar-sub" id="barSub">左：场景流程台 ｜ 右：需求说明</span>
+    </div>
+    <div class="bar-right">
+      <a href="index.html" target="_blank" rel="noopener">单独打开原型 <span>↗</span></a>
+      <a href="UnionID%E7%99%BB%E5%BD%95%E9%87%8D%E6%9E%84-%E9%9C%80%E6%B1%82%E8%AF%B4%E6%98%8E.md" target="_blank" rel="noopener">原文 <span>↗</span></a>
+      <button id="toggleDoc" type="button">收起说明</button>
+    </div>
+  </header>
+  <main class="review-body">
+    <section class="pane-proto"><iframe src="index.html" title="一键登录重构 · 场景流程台"></iframe></section>
+    <div class="splitter" id="splitter" role="separator" aria-label="拖动调整宽度" aria-orientation="vertical"></div>
+    <aside class="pane-doc" id="paneDoc" aria-label="需求说明">
+      <div class="doc-head"><strong>需求说明</strong><span id="docMeta">UnionID登录重构-需求说明.md</span></div>
+      <article class="doc" id="docBody"><p class="doc-note">正在读取需求说明…</p></article>
+    </aside>
+  </main>
+  <script>
+    const MD_FILE = 'UnionID登录重构-需求说明.md';
+
+    function escapeText(value){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
+    function inline(text){return escapeText(text).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');}
+
+    function renderTable(rows){
+      const split=row=>row.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(cell=>cell.trim());
+      const head=split(rows[0]);
+      const body=rows.slice(2).map(split);
+      return `<table><thead><tr>${head.map(cell=>`<th>${inline(cell)}</th>`).join('')}</tr></thead><tbody>${body.map(row=>`<tr>${row.map(cell=>`<td>${inline(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+
+    const APP_PHONE_FLOW=[
+      'flowchart TD',
+      'A[提交手机号验证码] --> B{验证码有效?}',
+      'B -- 否 --> X[提示重试 不写临时记录]',
+      'B -- 是 --> C[写手机号临时访问记录]',
+      'C --> D[进入首页临时访问]',
+      'D --> E{点击六类关键事件?}',
+      'E -- 否 --> F[继续仅浏览首页]',
+      'E -- 是 --> G[发起微信授权]',
+      'G --> H{取得 unionID?}',
+      'H -- 否 --> I[不建正式用户 终止退出]',
+      'H -- 是 --> J[按项目和手机号开关继续判断]'
+    ];
+    const normalizeMermaid=code=>code.replace(/\s+/g,' ').trim();
+    const FLOW_SIGNATURE=normalizeMermaid(APP_PHONE_FLOW.join('\n'));
+
+    // 与 index.html 同一套流程图视觉：静态内联，避免为一张图引入 mermaid 依赖
+    function appPhoneFlowSvg(){
+      const box=(x,y,w,h,lines,kind)=>`<rect class="flow-node ${kind}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${kind==='start'?26:8}"/><text class="flow-text ${kind==='warning'?'warning':kind==='success'?'success':''}" text-anchor="middle">${lines.map((line,i)=>`<tspan x="${x+w/2}" y="${y+h/2-(lines.length-1)*9+5+i*18}">${escapeText(line)}</tspan>`).join('')}</text>`;
+      const diamond=(cx,cy,hw,hh,lines)=>`<polygon class="flow-node decision" points="${cx},${cy-hh} ${cx+hw},${cy} ${cx},${cy+hh} ${cx-hw},${cy}"/><text class="flow-text" text-anchor="middle">${lines.map((line,i)=>`<tspan x="${cx}" y="${cy-(lines.length-1)*9+5+i*18}">${escapeText(line)}</tspan>`).join('')}</text>`;
+      const edge=(d,warn)=>`<path class="flow-edge${warn?' warn':''}" d="${d}" marker-end="url(#${warn?'mdArrowWarn':'mdArrow'})"/>`;
+      const label=(x,y,text,warn)=>`<rect class="edge-mask" x="${x-19}" y="${y-15}" width="38" height="19" rx="3"/><text class="edge-label${warn?' warn':''}" x="${x}" y="${y-2}" text-anchor="middle">${escapeText(text)}</text>`;
+      return `<svg viewBox="0 0 880 880" role="img" aria-labelledby="mdflowTitle">
+        <title id="mdflowTitle">APP 手机号验证码登录流程图</title>
+        <defs>
+          <marker id="mdArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#647276"/></marker>
+          <marker id="mdArrowWarn" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9f4933"/></marker>
+        </defs>
+        ${edge('M285 70 L285 98')}
+        ${edge('M400 155 L528 155',true)}
+        ${edge('M285 210 L285 246')}
+        ${edge('M285 302 L285 328')}
+        ${edge('M285 384 L285 412')}
+        ${edge('M400 469 L528 469',true)}
+        ${edge('M285 524 L285 560')}
+        ${edge('M285 616 L285 644')}
+        ${edge('M400 701 L528 701',true)}
+        ${edge('M285 756 L285 792')}
+        ${label(465,150,'否',true)}
+        ${label(465,464,'否',true)}
+        ${label(465,696,'否',true)}
+        <text class="edge-label" x="297" y="234">是</text>
+        <text class="edge-label" x="297" y="548">是</text>
+        <text class="edge-label" x="297" y="780">是</text>
+        ${box(170,16,230,54,['提交手机号验证码'],'start')}
+        ${diamond(285,155,115,55,['验证码有效?'])}
+        ${box(530,100,250,58,['提示重试','不写临时记录'],'warning')}
+        ${box(170,248,230,54,['写手机号临时访问记录'],'step')}
+        ${box(170,330,230,54,['进入首页临时访问'],'step')}
+        ${diamond(285,469,115,55,['点击六类关键事件?'])}
+        ${box(530,414,250,58,['继续仅浏览首页'],'step')}
+        ${box(170,562,230,54,['发起微信授权'],'step')}
+        ${diamond(285,701,115,55,['取得 unionID?'])}
+        ${box(530,650,250,58,['不建正式用户','终止退出'],'warning')}
+        ${box(170,794,230,54,['按项目和手机号开关','继续判断'],'success')}
+      </svg>`;
+    }
+
+    function renderMermaid(code){
+      if(normalizeMermaid(code)===FLOW_SIGNATURE){
+        return `<figure class="figure">${appPhoneFlowSvg()}<figcaption>APP 手机号验证码登录流程（对应原型场景 03、04）</figcaption></figure>`;
+      }
+      return `<p class="doc-note">这张流程图未内嵌渲染，请在原型对应场景查看。</p><pre><code>${escapeText(code)}</code></pre>`;
+    }
+
+    function renderMarkdown(markdown){
+      const lines=markdown.replace(/\r\n?/g,'\n').split('\n');
+      const out=[];
+      const stack=[];
+      let i=0;
+      const closeLists=()=>{while(stack.length)out.push(`</${stack.pop().type}>`);};
+      const openList=(type,indent)=>{
+        while(stack.length&&(indent<stack[stack.length-1].indent||(indent===stack[stack.length-1].indent&&stack[stack.length-1].type!==type)))out.push(`</${stack.pop().type}>`);
+        if(!stack.length||indent>stack[stack.length-1].indent){stack.push({type,indent});out.push(`<${type}>`);}
+      };
+      while(i<lines.length){
+        const line=lines[i];
+        const fence=line.match(/^```(\w*)/);
+        if(fence){
+          const buf=[];
+          i++;
+          while(i<lines.length&&!/^```/.test(lines[i]))buf.push(lines[i++]);
+          i++;
+          closeLists();
+          out.push(fence[1]==='mermaid'?renderMermaid(buf.join('\n')):`<pre><code>${escapeText(buf.join('\n'))}</code></pre>`);
+          continue;
+        }
+        if(!line.trim()){closeLists();i++;continue;}
+        const heading=line.match(/^(#{1,4})\s+(.*)$/);
+        if(heading){closeLists();const level=heading[1].length;out.push(`<h${level}>${inline(heading[2])}</h${level}>`);i++;continue;}
+        if(/^\|/.test(line)&&i+1<lines.length&&/^\|[\s:|-]+\|$/.test(lines[i+1].trim())){
+          const rows=[];
+          while(i<lines.length&&/^\|/.test(lines[i].trim()))rows.push(lines[i++]);
+          closeLists();
+          out.push(renderTable(rows));
+          continue;
+        }
+        const ordered=line.match(/^(\s*)\d+\.\s+(.*)$/);
+        const bullet=line.match(/^(\s*)[-*]\s+(.*)$/);
+        if(ordered||bullet){
+          const match=ordered||bullet;
+          openList(ordered?'ol':'ul',match[1].length);
+          // 不闭合 </li>：让紧跟其后的嵌套列表落进当前条目里（HTML 允许省略 li 结束标签）
+          out.push(`<li>${inline(match[2])}`);
+          i++;
+          continue;
+        }
+        closeLists();
+        out.push(`<p>${inline(line.trim())}</p>`);
+        i++;
+      }
+      closeLists();
+      return out.join('\n');
+    }
+
+    const docBody=document.querySelector('#docBody');
+    const docMeta=document.querySelector('#docMeta');
+    fetch(encodeURI(MD_FILE),{cache:'no-cache'})
+      .then(response=>{
+        if(!response.ok)throw new Error(`HTTP ${response.status}`);
+        return response.text();
+      })
+      .then(markdown=>{
+        docBody.innerHTML=renderMarkdown(markdown);
+        const version=markdown.match(/^版本：(.+)$/m);
+        docMeta.textContent=version?`${MD_FILE} ｜ 版本 ${version[1]}`:MD_FILE;
+        document.querySelector('#barSub').textContent=`左：场景流程台 V5.1 ｜ 右：需求说明${version?` ${version[1].split('（')[0]}`:''}`;
+      })
+      .catch(error=>{
+        docBody.innerHTML=`<p class="doc-error"><strong>读不到需求说明。</strong>请求 <code>${escapeText(MD_FILE)}</code> 失败（${escapeText(error.message)}）。<br>若是双击本地文件打开的，浏览器不允许读取同目录文件——请改用 http 打开：线上 <code>eltonliz.github.io/unionid-login-refactor/review.html</code>，或在本目录起一个本地服务器。左侧原型不受影响，可正常查看。</p>`;
+      });
+
+    document.querySelector('#toggleDoc').addEventListener('click',event=>{
+      const collapsed=document.body.classList.toggle('doc-collapsed');
+      event.currentTarget.textContent=collapsed?'展开说明':'收起说明';
+    });
+
+    const splitter=document.querySelector('#splitter');
+    const paneDoc=document.querySelector('#paneDoc');
+    let dragging=false;
+    const setWidth=clientX=>{
+      const body=document.querySelector('.review-body').getBoundingClientRect();
+      const width=Math.min(Math.max(body.right-clientX,300),body.width-360);
+      paneDoc.style.width=`${width}px`;
+    };
+    splitter.addEventListener('pointerdown',event=>{
+      dragging=true;
+      splitter.classList.add('dragging');
+      splitter.setPointerCapture(event.pointerId);
+    });
+    splitter.addEventListener('pointermove',event=>{if(dragging)setWidth(event.clientX);});
+    splitter.addEventListener('pointerup',event=>{
+      dragging=false;
+      splitter.classList.remove('dragging');
+      splitter.releasePointerCapture(event.pointerId);
+    });
+  </script>
+</body>
+</html>

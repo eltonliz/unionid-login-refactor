@@ -18,6 +18,7 @@
 - `index.html` — 账号登录重构逻辑与可交互高保真原型。
 - `index-v2-product-flow.html` — V2 产品流程演示备份。
 - `UnionID登录重构-需求说明.md` — 面向研发和测试的完整业务规则、场景流程、异常与验收用例。
+- `登录重构-内部评审逐字稿.md` — 按原型页面顺序演示的研发、测试评审讲稿。
 - `product-facts.md` — 微信 UnionID、OpenID、手机号能力的官方事实基线。
 - `MEMORY.md` — 长期业务规则与设计取舍。
 
